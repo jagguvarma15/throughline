@@ -3,7 +3,7 @@
 # =============================================================================
 
 # Stage 1: Build Environment
-FROM node:18-alpine AS builder
+FROM node:25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache python3 make g++ git
@@ -30,7 +30,7 @@ RUN npm test
 RUN npm prune --omit=dev
 
 # Stage 2: Production Runtime
-FROM node:18-alpine AS production
+FROM node:25-alpine AS production
 
 # Install runtime dependencies
 RUN apk add --no-cache dumb-init curl
@@ -60,7 +60,7 @@ ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/server.js"]
 
 # Stage 3: Development Environment
-FROM node:18-alpine AS development
+FROM node:25-alpine AS development
 
 RUN apk add --no-cache git bash vim
 
