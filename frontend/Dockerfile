@@ -1,5 +1,5 @@
 # Multi-stage build for React frontend
-FROM node:18-alpine AS builder
+FROM node:25-alpine AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 
 # Development environment
-FROM node:18-alpine AS development
+FROM node:25-alpine AS development
 
 WORKDIR /app
 
