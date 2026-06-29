@@ -1,0 +1,13 @@
+{
+  "name": "@throughline/dashboard",
+  "version": "0.1.0",
+  "description": "Throughline dashboard: durable-run UI (runs, timeline, approvals, replay).",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'dashboard: Vite build is wired in Phase 3.3 (skeleton no-op)'",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src"
+  }
+}
