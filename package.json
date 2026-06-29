@@ -1,46 +1,29 @@
 {
-  "name": "taskflow",
-  "version": "1.0.0",
-  "description": "Production-Ready Task Management System",
-  "main": "index.js",
+  "name": "throughline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Throughline — a lightweight, embeddable, framework-agnostic durable-execution library for AI agents (monorepo root).",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jagguvarma15/TaskFlow.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/jagguvarma15/TaskFlow/issues"
-  },
-  "homepage": "https://github.com/jagguvarma15/TaskFlow#readme",
-  "dependencies": {
-    "bcryptjs": "^3.0.2",
-    "compression": "^1.8.1",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.1",
-    "express": "^5.1.0",
-    "helmet": "^8.1.0",
-    "joi": "^17.13.3",
-    "jsonwebtoken": "^9.0.2",
-    "knex": "^3.1.0",
-    "morgan": "^1.10.1",
-    "pg": "^8.16.3",
-    "rate-limiter-flexible": "^7.1.1",
-    "redis": "^5.6.1",
-    "winston": "^3.17.0"
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "lint": "biome check .",
+    "format": "biome format --write ."
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.1.0",
-    "eslint": "^9.32.0",
-    "jest": "^30.0.5",
-    "nodemon": "^3.1.10",
-    "supertest": "^7.1.4",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "better-sqlite3"]
   }
 }
