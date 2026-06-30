@@ -1,5 +1,15 @@
-// @throughline/core — durable-execution engine.
-// Implemented in Phase 1 (throughline(), task(), ctx.step, replay, worker)
-// and Phase 2 (suspend/resume, budgets, OTel). Skeleton placeholder for now.
+// @throughline/core — durable-execution engine public surface.
 
-export const VERSION = "0.1.0";
+export * from "./errors";
+export * from "./types";
+export * from "./clock";
+export * from "./id";
+export * from "./keys";
+export * from "./retry";
+export * from "./budget";
+export * from "./logger";
+export * from "./throughline";
+export { Worker } from "./engine/worker";
+export type { WorkerDeps } from "./engine/worker";
+export { runWorkflow } from "./engine/run";
+export type { RunDeps, RunOutcome } from "./engine/run";

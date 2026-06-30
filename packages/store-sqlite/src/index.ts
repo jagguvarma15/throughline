@@ -1,5 +1,10 @@
-// @throughline/store-sqlite — default Store implementation (better-sqlite3).
-// Implemented in Phase 1.1 (schema, claim via BEGIN IMMEDIATE, atomic consume,
-// lease fencing). Skeleton placeholder for now.
+import { SqliteStore } from "./store";
+import type { SqliteStoreOptions } from "./store";
 
-export const VERSION = "0.1.0";
+/** Create a SQLite-backed durable store. Use ":memory:" for ephemeral/test stores. */
+export function sqlite(path = "throughline.db", opts?: SqliteStoreOptions): SqliteStore {
+  return new SqliteStore(path, opts);
+}
+
+export { SqliteStore } from "./store";
+export type { SqliteStoreOptions } from "./store";

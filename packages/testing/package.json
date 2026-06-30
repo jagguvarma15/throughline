@@ -25,6 +25,9 @@
   "dependencies": {
     "@throughline/core": "workspace:*"
   },
+  "peerDependencies": {
+    "vitest": ">=2"
+  },
   "publishConfig": {
     "access": "public"
   }

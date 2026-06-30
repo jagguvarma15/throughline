@@ -1,5 +1,9 @@
-// @throughline/testing — fault-injection store + conformance/property/golden harness.
-// faultStore() + defineStoreSuite()/defineEngineSuite() (Phase 1.1/1.4),
-// record/replay (Phase 3.1). Skeleton placeholder for now.
+// @throughline/testing — conformance, fault-injection, property, and record/replay harness.
 
-export const VERSION = "0.1.0";
+export { defineStoreSuite } from "./harness";
+export { defineEngineSuite } from "./engineSuite";
+export type { StoreFactory } from "./harness";
+export { faultStore, FaultStore } from "./faultStore";
+export type { FaultPlan } from "./faultStore";
+export { controlledClock } from "./clock";
+export type { ControlledClock } from "./clock";
