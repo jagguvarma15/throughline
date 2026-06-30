@@ -19,10 +19,16 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "biome check src"
   },
   "dependencies": {
-    "@throughline/core": "workspace:*"
+    "@throughline/core": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@throughline/testing": "workspace:*",
+    "@types/pg": "^8.11.10"
   },
   "publishConfig": {
     "access": "public"
