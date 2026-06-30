@@ -76,6 +76,15 @@ export class CancelledError extends ThroughlineError {
 /** Dev-mode guard: replayed step_key order diverged from the journal (see guarantees §4). */
 export class NonDeterminismError extends ThroughlineError {}
 
+/** A durable wait (waitForEvent/waitForApproval) timed out before an event arrived. */
+export class TimeoutError extends ThroughlineError {
+  readonly waitName: string;
+  constructor(waitName: string) {
+    super(`wait timed out: ${waitName}`);
+    this.waitName = waitName;
+  }
+}
+
 /**
  * Internal control-flow signal for durable waits/sleeps. This is NOT a failure:
  * the worker catches it and parks the workflow; it is never journaled as a failed

@@ -39,6 +39,7 @@ interface RawWf {
   lease_epoch: number;
   lease_expires_at: number | null;
   heartbeat_at: number | null;
+  cancel_requested: number;
   created_at: number;
   updated_at: number;
 }
@@ -92,6 +93,7 @@ function mapWorkflow(r: RawWf): WorkflowRow {
     leaseEpoch: r.lease_epoch,
     leaseExpiresAt: r.lease_expires_at,
     heartbeatAt: r.heartbeat_at,
+    cancelRequested: r.cancel_requested !== 0,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -425,6 +427,31 @@ export class SqliteStore implements Store {
       params.epoch = fence.leaseEpoch;
     }
     this.#s(sql).run(params);
+  }
+
+  async requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop"> {
+    const tx = this.db.transaction((): "cancelled" | "requested" | "noop" => {
+      const row = this.#s("SELECT status FROM workflows WHERE id=?").get(id) as
+        | { status: string }
+        | undefined;
+      if (!row) return "noop";
+      if (row.status === "pending" || row.status === "waiting") {
+        this.#s(
+          `UPDATE workflows SET status='cancelled', wait_event=NULL, wake_at=NULL,
+             locked_by=NULL, lease_expires_at=NULL, updated_at=@now WHERE id=@id`,
+        ).run({ id, now });
+        return "cancelled";
+      }
+      if (row.status === "running") {
+        this.#s("UPDATE workflows SET cancel_requested=1, updated_at=@now WHERE id=@id").run({
+          id,
+          now,
+        });
+        return "requested";
+      }
+      return "noop";
+    });
+    return tx.immediate();
   }
 
   close(): void {

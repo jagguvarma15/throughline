@@ -2,7 +2,7 @@ import { type Clock, systemClock } from "./clock";
 import { Worker } from "./engine/worker";
 import { silentLogger } from "./logger";
 import { DEFAULT_RETRY, resolveRetry } from "./retry";
-import type { Logger, RetryPolicy, RunState, Store, TaskHandler } from "./types";
+import type { Logger, RetryPolicy, RunState, Store, TaskHandler, TaskRegistration } from "./types";
 
 export interface ThroughlineOptions {
   store: Store;
@@ -32,9 +32,11 @@ export interface TaskRef<I, O> {
 }
 
 export interface Throughline {
-  task<I, O>(name: string, handler: TaskHandler<I, O>): TaskRef<I, O>;
+  task<I, O>(name: string, handler: TaskHandler<I, O>, opts?: { budget?: number }): TaskRef<I, O>;
   start<I>(name: string, input: I, opts?: StartOptions): Promise<string>;
   getRun(id: string): Promise<RunState | null>;
+  signal(id: string, name: string, payload?: unknown): Promise<void>;
+  cancel(id: string): Promise<"cancelled" | "requested" | "noop">;
   worker(opts?: WorkerOptions): Worker;
 }
 
@@ -44,7 +46,7 @@ export function throughline(options: ThroughlineOptions): Throughline {
   const logger = options.logger ?? silentLogger;
   const defaultRetry = resolveRetry(DEFAULT_RETRY, options.defaultRetry);
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const registry = new Map<string, TaskHandler<unknown, unknown>>();
+  const registry = new Map<string, TaskRegistration>();
   let initialized = false;
 
   const ensureInit = async (): Promise<void> => {
@@ -55,9 +57,16 @@ export function throughline(options: ThroughlineOptions): Throughline {
   };
 
   return {
-    task<I, O>(name: string, handler: TaskHandler<I, O>): TaskRef<I, O> {
+    task<I, O>(
+      name: string,
+      handler: TaskHandler<I, O>,
+      opts?: { budget?: number },
+    ): TaskRef<I, O> {
       if (registry.has(name)) throw new Error(`task already registered: ${name}`);
-      registry.set(name, handler as unknown as TaskHandler<unknown, unknown>);
+      registry.set(name, {
+        handler: handler as unknown as TaskHandler<unknown, unknown>,
+        budget: opts?.budget,
+      });
       return { name };
     },
 
@@ -87,6 +96,16 @@ export function throughline(options: ThroughlineOptions): Throughline {
         error: wf.error,
         steps,
       };
+    },
+
+    async signal(id: string, name: string, payload?: unknown): Promise<void> {
+      await ensureInit();
+      await store.addEvent(id, name, payload, clock.now());
+    },
+
+    async cancel(id: string): Promise<"cancelled" | "requested" | "noop"> {
+      await ensureInit();
+      return store.requestCancel(id, clock.now());
     },
 
     worker(opts?: WorkerOptions): Worker {

@@ -7,6 +7,7 @@ export * from "./id";
 export * from "./keys";
 export * from "./retry";
 export * from "./budget";
+export * from "./duration";
 export * from "./logger";
 export * from "./throughline";
 export { Worker } from "./engine/worker";

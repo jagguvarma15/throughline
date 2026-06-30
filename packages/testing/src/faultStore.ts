@@ -104,6 +104,10 @@ export class FaultStore implements Store {
     return this.#inner.consumeEventIntoJournal(args);
   }
 
+  requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop"> {
+    return this.#inner.requestCancel(id, now);
+  }
+
   releaseLease(id: string, fence?: Fence): Promise<void> {
     return this.#inner.releaseLease(id, fence);
   }

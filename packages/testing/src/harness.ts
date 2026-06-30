@@ -303,5 +303,33 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       expect(got?.status).toBe("cancelled");
       expect(got?.output).toEqual({ done: true });
     });
+
+    it("requestCancel cancels pending and waiting runs", async () => {
+      const a = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      expect(await store.requestCancel(a.id, 2)).toBe("cancelled");
+      expect((await store.getWorkflow(a.id))?.status).toBe("cancelled");
+
+      const b = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      const c = await store.claim("w1", 1000, 10);
+      if (!c) throw new Error("expected a claim");
+      await store.updateWorkflow(
+        b.id,
+        { status: "waiting", waitEvent: "go" },
+        { workerId: "w1", leaseEpoch: c.leaseEpoch },
+      );
+      expect(await store.requestCancel(b.id, 20)).toBe("cancelled");
+      const got = await store.getWorkflow(b.id);
+      expect(got?.status).toBe("cancelled");
+      expect(got?.waitEvent).toBeNull();
+    });
+
+    it("requestCancel only flags a running run for cooperative cancel", async () => {
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      await store.claim("w1", 10_000, 1);
+      expect(await store.requestCancel(wf.id, 2)).toBe("requested");
+      const got = await store.getWorkflow(wf.id);
+      expect(got?.status).toBe("running");
+      expect(got?.cancelRequested).toBe(true);
+    });
   });
 }

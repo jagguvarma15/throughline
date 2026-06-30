@@ -1,5 +1,11 @@
-// @throughline/store-postgres — production Store implementation (pg).
-// Implemented in Phase 2.3 (same Store interface, claim via
-// SELECT ... FOR UPDATE SKIP LOCKED, SQL migrations). Skeleton placeholder.
+import type { Pool } from "pg";
+import { PostgresStore } from "./store";
+import type { PostgresStoreOptions } from "./store";
 
-export const VERSION = "0.1.0";
+/** Create a Postgres-backed durable store from a connection string or an existing pg Pool. */
+export function postgres(poolOrUrl: Pool | string, opts?: PostgresStoreOptions): PostgresStore {
+  return new PostgresStore(poolOrUrl, opts);
+}
+
+export { PostgresStore } from "./store";
+export type { PostgresStoreOptions } from "./store";
