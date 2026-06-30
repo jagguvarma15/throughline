@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveKey, OrdinalCounter, stepKey } from "../src/keys";
+import { OrdinalCounter, deriveKey, stepKey } from "../src/keys";
 
 describe("deriveKey", () => {
   it("is stable for identical inputs", () => {

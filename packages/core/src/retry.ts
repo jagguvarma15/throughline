@@ -22,8 +22,7 @@ export function backoffMs(
   policy: RetryPolicy,
   rand: () => number = Math.random,
 ): number {
-  const raw =
-    policy.backoff === "exponential" ? policy.baseMs * 2 ** (attempt - 1) : policy.baseMs;
+  const raw = policy.backoff === "exponential" ? policy.baseMs * 2 ** (attempt - 1) : policy.baseMs;
   const capped = Math.min(raw, policy.maxMs ?? Number.POSITIVE_INFINITY);
   if (!policy.jitter) return Math.floor(capped);
   return Math.floor(capped * (0.5 + rand() * 0.5));

@@ -23,7 +23,12 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@throughline/core": "workspace:*"
+    "@throughline/core": "workspace:*",
+    "better-sqlite3": "^12.11.1"
+  },
+  "devDependencies": {
+    "@throughline/testing": "workspace:*",
+    "@types/better-sqlite3": "^7.6.11"
   },
   "publishConfig": {
     "access": "public"

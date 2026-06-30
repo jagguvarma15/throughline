@@ -19,7 +19,6 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
     "lint": "biome check src"
   },
   "dependencies": {

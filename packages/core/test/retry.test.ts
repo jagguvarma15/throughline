@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NonRetryableError } from "../src/errors";
-import { backoffMs, DEFAULT_RETRY, isNonRetryable, resolveRetry } from "../src/retry";
+import { DEFAULT_RETRY, backoffMs, isNonRetryable, resolveRetry } from "../src/retry";
 import type { RetryPolicy } from "../src/types";
 
 const policy: RetryPolicy = {
