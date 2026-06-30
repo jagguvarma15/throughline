@@ -117,6 +117,19 @@ export type WorkflowPatch = Partial<
   >
 >;
 
+export interface StoreStats {
+  workflowsByStatus: Record<string, number>;
+  stepCount: number;
+  failedStepCount: number;
+  tokenSum: number;
+}
+
+export interface ListWorkflowsOptions {
+  status?: WorkflowStatus;
+  limit?: number;
+  offset?: number;
+}
+
 export interface Store {
   /** Idempotent migrations. Safe to call repeatedly; never destroys data. */
   init(): Promise<void>;
@@ -153,6 +166,10 @@ export interface Store {
   ): Promise<{ found: true; payload: unknown; seq: number } | { found: false }>;
   /** pending/waiting -> cancelled (terminal); running -> set cancel_requested flag. */
   requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop">;
+  /** List workflows for the control-plane, newest first. */
+  listWorkflows(opts?: ListWorkflowsOptions): Promise<WorkflowRow[]>;
+  /** Aggregate counts for metrics. */
+  stats(): Promise<StoreStats>;
   releaseLease(id: string, fence?: Fence): Promise<void>;
   close(): void | Promise<void>;
 }

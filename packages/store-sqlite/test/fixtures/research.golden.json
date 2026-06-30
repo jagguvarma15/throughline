@@ -1,0 +1,53 @@
+{
+  "name": "research",
+  "input": {
+    "topic": "otters"
+  },
+  "output": {
+    "summary": "summary[result(otters history); result(otters status)]",
+    "queries": ["otters history", "otters status"]
+  },
+  "status": "completed",
+  "steps": [
+    {
+      "stepKey": "plan#0",
+      "seq": 0,
+      "status": "completed",
+      "kind": "step",
+      "output": ["otters history", "otters status"],
+      "error": null,
+      "attempts": 1,
+      "cost": 0
+    },
+    {
+      "stepKey": "search-0#0",
+      "seq": 1,
+      "status": "completed",
+      "kind": "step",
+      "output": "result(otters history)",
+      "error": null,
+      "attempts": 1,
+      "cost": 0
+    },
+    {
+      "stepKey": "search-1#0",
+      "seq": 2,
+      "status": "completed",
+      "kind": "step",
+      "output": "result(otters status)",
+      "error": null,
+      "attempts": 1,
+      "cost": 0
+    },
+    {
+      "stepKey": "summarize#0",
+      "seq": 3,
+      "status": "completed",
+      "kind": "step",
+      "output": "summary[result(otters history); result(otters status)]",
+      "error": null,
+      "attempts": 1,
+      "cost": 0
+    }
+  ]
+}

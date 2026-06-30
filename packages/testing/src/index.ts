@@ -7,3 +7,5 @@ export { faultStore, FaultStore } from "./faultStore";
 export type { FaultPlan } from "./faultStore";
 export { controlledClock } from "./clock";
 export type { ControlledClock } from "./clock";
+export { goldenExists, readGolden, seedGolden, toGolden, writeGolden } from "./golden";
+export type { GoldenTrace } from "./golden";

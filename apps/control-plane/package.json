@@ -6,12 +6,25 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node dist/index.js",
     "build": "tsup src/index.ts --format esm --clean",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "biome check src"
   },
   "dependencies": {
     "@throughline/core": "workspace:*",
-    "@throughline/store-sqlite": "workspace:*"
+    "@throughline/store-sqlite": "workspace:*",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "rate-limiter-flexible": "^5.0.4",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0"
   }
 }

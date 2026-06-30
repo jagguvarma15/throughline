@@ -5,10 +5,12 @@ import {
   type EventRow,
   type Fence,
   LeaseLostError,
+  type ListWorkflowsOptions,
   type NewWorkflow,
   type SerializedError,
   type StepRow,
   type Store,
+  type StoreStats,
   WorkflowNotFoundError,
   type WorkflowPatch,
   type WorkflowRow,
@@ -427,6 +429,36 @@ export class SqliteStore implements Store {
       params.epoch = fence.leaseEpoch;
     }
     this.#s(sql).run(params);
+  }
+
+  async listWorkflows(opts: ListWorkflowsOptions = {}): Promise<WorkflowRow[]> {
+    const params: Record<string, unknown> = { limit: opts.limit ?? 100, offset: opts.offset ?? 0 };
+    let sql = "SELECT * FROM workflows";
+    if (opts.status) {
+      sql += " WHERE status=@status";
+      params.status = opts.status;
+    }
+    sql += " ORDER BY created_at DESC LIMIT @limit OFFSET @offset";
+    return (this.#s(sql).all(params) as RawWf[]).map(mapWorkflow);
+  }
+
+  async stats(): Promise<StoreStats> {
+    const workflowsByStatus: Record<string, number> = {};
+    const rows = this.#s(
+      "SELECT status, COUNT(*) AS c FROM workflows GROUP BY status",
+    ).all() as Array<{
+      status: string;
+      c: number;
+    }>;
+    for (const r of rows) workflowsByStatus[r.status] = r.c;
+    const stepCount = (this.#s("SELECT COUNT(*) AS c FROM steps").get() as { c: number }).c;
+    const failedStepCount = (
+      this.#s("SELECT COUNT(*) AS c FROM steps WHERE status='failed'").get() as { c: number }
+    ).c;
+    const tokenSum = (
+      this.#s("SELECT COALESCE(SUM(cost), 0) AS s FROM steps").get() as { s: number }
+    ).s;
+    return { workflowsByStatus, stepCount, failedStepCount, tokenSum };
   }
 
   async requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop"> {
