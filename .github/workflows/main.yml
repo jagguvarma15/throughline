@@ -19,6 +19,20 @@ jobs:
   build:
     name: Lint, typecheck, build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: throughline
+          POSTGRES_PASSWORD: throughline
+          POSTGRES_DB: throughline
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,6 +57,8 @@ jobs:
 
       - name: Test
         run: pnpm -r --if-present test
+        env:
+          THROUGHLINE_TEST_PG: postgres://throughline:throughline@localhost:5432/throughline
 
       - name: Build
         run: pnpm -r build
