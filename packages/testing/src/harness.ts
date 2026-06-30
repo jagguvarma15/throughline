@@ -331,5 +331,46 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       expect(got?.status).toBe("running");
       expect(got?.cancelRequested).toBe(true);
     });
+
+    it("listWorkflows returns newest-first and filters by status", async () => {
+      const a = await store.createWorkflow({ name: "a", input: 0, now: 1 });
+      const b = await store.createWorkflow({ name: "b", input: 0, now: 2 });
+      expect((await store.listWorkflows()).map((w) => w.id)).toEqual([b.id, a.id]);
+      await store.updateWorkflow(a.id, { status: "completed" });
+      expect((await store.listWorkflows({ status: "completed" })).map((w) => w.id)).toEqual([a.id]);
+      expect((await store.listWorkflows({ limit: 1 })).length).toBe(1);
+    });
+
+    it("stats aggregates workflow statuses and step tokens", async () => {
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      const c = await store.claim("w1", 10_000, 1);
+      if (!c) throw new Error("expected a claim");
+      const fence = { workerId: "w1", leaseEpoch: c.leaseEpoch };
+      await store.appendStep({
+        workflowId: wf.id,
+        stepKey: "a#0",
+        status: "completed",
+        output: 1,
+        attempts: 1,
+        cost: 5,
+        now: 2,
+        fence,
+      });
+      await store.appendStep({
+        workflowId: wf.id,
+        stepKey: "b#0",
+        status: "failed",
+        error: { message: "x", type: "E" },
+        attempts: 3,
+        cost: 2,
+        now: 3,
+        fence,
+      });
+      const s = await store.stats();
+      expect(s.workflowsByStatus.running).toBe(1);
+      expect(s.stepCount).toBe(2);
+      expect(s.failedStepCount).toBe(1);
+      expect(s.tokenSum).toBe(7);
+    });
   });
 }
