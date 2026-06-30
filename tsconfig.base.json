@@ -15,6 +15,13 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@throughline/core": ["./packages/core/src/index.ts"],
+      "@throughline/store-sqlite": ["./packages/store-sqlite/src/index.ts"],
+      "@throughline/store-postgres": ["./packages/store-postgres/src/index.ts"],
+      "@throughline/testing": ["./packages/testing/src/index.ts"]
+    },
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
