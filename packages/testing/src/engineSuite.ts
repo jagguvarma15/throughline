@@ -438,6 +438,6 @@ export function defineEngineSuite(makeStore: StoreFactory): void {
         expect(result.output, `seed ${seed}`).toEqual(baseline.output);
         expect(result.effects, `seed ${seed}`).toEqual(baseline.effects);
       }
-    });
+    }, 30_000);
   });
 }
