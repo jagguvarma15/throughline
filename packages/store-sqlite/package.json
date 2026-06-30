@@ -27,6 +27,9 @@
     "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/context-async-hooks": "^2.0.0",
+    "@opentelemetry/sdk-trace-base": "^2.0.0",
     "@throughline/testing": "workspace:*",
     "@types/better-sqlite3": "^7.6.11"
   },
