@@ -11,6 +11,7 @@ import {
   serializeError,
 } from "../errors";
 import { OrdinalCounter, deriveKey, stepKey } from "../keys";
+import type { Tracing } from "../otel";
 import { backoffMs, isNonRetryable, resolveRetry } from "../retry";
 import type {
   Context,
@@ -37,6 +38,8 @@ export interface RunContextDeps {
   sleep: (ms: number) => Promise<void>;
   /** Per-run token budget limit; reconstructed accounting is exposed as ctx.tokens. */
   budgetLimit?: number;
+  /** Optional OpenTelemetry tracing (no-op without a registered provider). */
+  tracing?: Tracing | null;
   /** Cooperative-cancel probe; checked before each fresh step. */
   checkCancel?: () => Promise<boolean>;
 }
@@ -70,6 +73,26 @@ export class RunContext implements Context {
     // Ordinal is assigned synchronously at the call site, before any await (guarantees §4).
     const ordinal = this.#ordinals.next(name);
     const key = stepKey(name, ordinal, opts?.idempotencyKey);
+    const tracing = this.#d.tracing;
+    if (!tracing) return this.#runStep<T>(key, fn, opts);
+    return tracing.tracer.startActiveSpan(`step ${name}`, async (span) => {
+      span.setAttribute("throughline.step_key", key);
+      try {
+        const out = await this.#runStep<T>(key, fn, opts);
+        span.setAttribute("throughline.tokens_consumed", this.tokens.consumed);
+        span.setStatus({ code: tracing.ok });
+        return out;
+      } catch (e) {
+        if (e instanceof Error) span.recordException(e);
+        span.setStatus({ code: tracing.error });
+        throw e;
+      } finally {
+        span.end();
+      }
+    });
+  }
+
+  async #runStep<T>(key: string, fn: () => Promise<T>, opts?: StepOptions): Promise<T> {
     const policy = resolveRetry(this.#d.defaultRetry, opts?.retry);
 
     const existing = this.#d.journal.get(key);
