@@ -5,10 +5,12 @@ import {
   type EventRow,
   type Fence,
   LeaseLostError,
+  type ListWorkflowsOptions,
   type NewWorkflow,
   type SerializedError,
   type StepRow,
   type Store,
+  type StoreStats,
   WorkflowNotFoundError,
   type WorkflowPatch,
   type WorkflowRow,
@@ -442,6 +444,44 @@ export class PostgresStore implements Store {
       }
       return { found: true as const, payload: j(ev.payload), seq };
     });
+  }
+
+  async listWorkflows(opts: ListWorkflowsOptions = {}): Promise<WorkflowRow[]> {
+    const limit = opts.limit ?? 100;
+    const offset = opts.offset ?? 0;
+    if (opts.status) {
+      const r = await this.#pool.query<RawWf>(
+        "SELECT * FROM workflows WHERE status=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+        [opts.status, limit, offset],
+      );
+      return r.rows.map(mapWorkflow);
+    }
+    const r = await this.#pool.query<RawWf>(
+      "SELECT * FROM workflows ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+      [limit, offset],
+    );
+    return r.rows.map(mapWorkflow);
+  }
+
+  async stats(): Promise<StoreStats> {
+    const workflowsByStatus: Record<string, number> = {};
+    const s = await this.#pool.query<{ status: string; c: number }>(
+      "SELECT status, COUNT(*)::int AS c FROM workflows GROUP BY status",
+    );
+    for (const r of s.rows) workflowsByStatus[r.status] = Number(r.c);
+    const sc = await this.#pool.query<{ c: number }>("SELECT COUNT(*)::int AS c FROM steps");
+    const fc = await this.#pool.query<{ c: number }>(
+      "SELECT COUNT(*)::int AS c FROM steps WHERE status='failed'",
+    );
+    const tk = await this.#pool.query<{ s: number }>(
+      "SELECT COALESCE(SUM(cost), 0)::int AS s FROM steps",
+    );
+    return {
+      workflowsByStatus,
+      stepCount: Number(sc.rows[0]?.c ?? 0),
+      failedStepCount: Number(fc.rows[0]?.c ?? 0),
+      tokenSum: Number(tk.rows[0]?.s ?? 0),
+    };
   }
 
   async requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop"> {
