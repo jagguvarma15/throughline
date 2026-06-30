@@ -25,6 +25,8 @@ export interface RunDeps {
   fence: Fence;
   logger: Logger;
   sleep: (ms: number) => Promise<void>;
+  budgetLimit?: number;
+  checkCancel?: () => Promise<boolean>;
 }
 
 /**
@@ -45,6 +47,8 @@ export async function runWorkflow(deps: RunDeps): Promise<RunOutcome> {
     fence: deps.fence,
     logger: deps.logger,
     sleep: deps.sleep,
+    budgetLimit: deps.budgetLimit,
+    checkCancel: deps.checkCancel,
   });
 
   try {

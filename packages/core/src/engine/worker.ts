@@ -1,14 +1,14 @@
 import { type Clock, systemClock } from "../clock";
 import { CancelledError, LeaseLostError, serializeError } from "../errors";
 import { silentLogger } from "../logger";
-import type { Fence, Logger, RetryPolicy, Store, TaskHandler, WorkflowPatch } from "../types";
+import type { Fence, Logger, RetryPolicy, Store, TaskRegistration, WorkflowPatch } from "../types";
 import { runWorkflow } from "./run";
 
 const realSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export interface WorkerDeps {
   store: Store;
-  registry: Map<string, TaskHandler<unknown, unknown>>;
+  registry: Map<string, TaskRegistration>;
   defaultRetry: RetryPolicy;
   clock?: Clock;
   logger?: Logger;
@@ -24,7 +24,7 @@ let workerSeq = 0;
 /** Claims runnable workflows, runs them, heartbeats the lease, and records the outcome. */
 export class Worker {
   #store: Store;
-  #registry: Map<string, TaskHandler<unknown, unknown>>;
+  #registry: Map<string, TaskRegistration>;
   #defaultRetry: RetryPolicy;
   #clock: Clock;
   #logger: Logger;
@@ -64,8 +64,8 @@ export class Worker {
     if (!wf) return false;
     const fence: Fence = { workerId: this.#workerId, leaseEpoch: wf.leaseEpoch };
 
-    const handler = this.#registry.get(wf.name);
-    if (!handler) {
+    const reg = this.#registry.get(wf.name);
+    if (!reg) {
       await this.#finish(
         wf.id,
         {
@@ -81,13 +81,15 @@ export class Worker {
     try {
       const outcome = await runWorkflow({
         store: this.#store,
-        handler,
+        handler: reg.handler,
         workflow: wf,
         clock: this.#clock,
         defaultRetry: this.#defaultRetry,
+        budgetLimit: reg.budget,
         fence,
         logger: this.#logger,
         sleep: this.#sleep,
+        checkCancel: async () => (await this.#store.getWorkflow(wf.id))?.cancelRequested ?? false,
       });
       if (outcome.status === "completed") {
         await this.#finish(wf.id, { status: "completed", output: outcome.output }, fence);

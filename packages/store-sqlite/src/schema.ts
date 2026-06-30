@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS workflows (
   lease_epoch       INTEGER NOT NULL DEFAULT 0,
   lease_expires_at  INTEGER,
   heartbeat_at      INTEGER,
+  cancel_requested  INTEGER NOT NULL DEFAULT 0,
   created_at        INTEGER NOT NULL,
   updated_at        INTEGER NOT NULL
 );

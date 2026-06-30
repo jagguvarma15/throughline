@@ -33,6 +33,7 @@ export interface WorkflowRow {
   leaseEpoch: number;
   leaseExpiresAt: number | null;
   heartbeatAt: number | null;
+  cancelRequested: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -150,6 +151,8 @@ export interface Store {
   consumeEventIntoJournal(
     args: ConsumeEventInput,
   ): Promise<{ found: true; payload: unknown; seq: number } | { found: false }>;
+  /** pending/waiting -> cancelled (terminal); running -> set cancel_requested flag. */
+  requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop">;
   releaseLease(id: string, fence?: Fence): Promise<void>;
   close(): void | Promise<void>;
 }
@@ -157,6 +160,9 @@ export interface Store {
 // ---------------------------------------------------------------------------
 // Engine-facing types
 // ---------------------------------------------------------------------------
+
+/** A duration in milliseconds, or a string like "30s", "5m", "1h". */
+export type Duration = number | string;
 
 export interface RetryPolicy {
   maxAttempts: number;
@@ -194,11 +200,22 @@ export interface Context {
   readonly logger: Logger;
   readonly tokens: TokenBudget;
   step<T>(name: string, fn: () => Promise<T>, opts?: StepOptions): Promise<T>;
+  /** Durable timer: suspend until `ms` have elapsed, surviving restarts. */
+  sleep(name: string, ms: number): Promise<void>;
+  /** Durably wait for a signalled event; optionally time out. */
+  waitForEvent<T = unknown>(name: string, opts?: { timeout?: Duration }): Promise<T>;
+  /** Sugar over waitForEvent: returns whether the signal approved. */
+  waitForApproval(name: string, opts?: { timeout?: Duration }): Promise<boolean>;
   deriveKey(...parts: unknown[]): string;
   maxIterations(n: number): number;
 }
 
 export type TaskHandler<I, O> = (ctx: Context, input: I) => Promise<O>;
+
+export interface TaskRegistration {
+  handler: TaskHandler<unknown, unknown>;
+  budget?: number;
+}
 
 export interface RunState {
   id: string;
