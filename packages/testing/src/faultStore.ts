@@ -4,9 +4,11 @@ import {
   type EventRow,
   type Fence,
   LeaseLostError,
+  type ListWorkflowsOptions,
   type NewWorkflow,
   type StepRow,
   type Store,
+  type StoreStats,
   type WorkflowPatch,
   type WorkflowRow,
 } from "@throughline/core";
@@ -106,6 +108,14 @@ export class FaultStore implements Store {
 
   requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop"> {
     return this.#inner.requestCancel(id, now);
+  }
+
+  listWorkflows(opts?: ListWorkflowsOptions): Promise<WorkflowRow[]> {
+    return this.#inner.listWorkflows(opts);
+  }
+
+  stats(): Promise<StoreStats> {
+    return this.#inner.stats();
   }
 
   releaseLease(id: string, fence?: Fence): Promise<void> {
