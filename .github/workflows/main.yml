@@ -52,6 +52,9 @@ jobs:
       - name: Lint (Biome)
         run: pnpm lint
 
+      - name: Forbidden deps check
+        run: node scripts/check-forbidden-deps.mjs
+
       - name: Typecheck
         run: pnpm -r typecheck
 

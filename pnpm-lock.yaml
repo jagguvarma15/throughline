@@ -29,6 +29,9 @@ importers:
       '@throughline/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@throughline/store-postgres':
+        specifier: workspace:*
+        version: link:../../packages/store-postgres
       '@throughline/store-sqlite':
         specifier: workspace:*
         version: link:../../packages/store-sqlite
@@ -91,6 +94,32 @@ importers:
       vite:
         specifier: ^6.0.5
         version: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  examples/deep-research:
+    dependencies:
+      '@throughline/adapters-llm':
+        specifier: workspace:*
+        version: link:../../packages/adapters-llm
+      '@throughline/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@throughline/store-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/store-sqlite
+    devDependencies:
+      '@throughline/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
+  packages/adapters-llm:
+    dependencies:
+      '@throughline/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@throughline/store-sqlite':
+        specifier: workspace:*
+        version: link:../store-sqlite
 
   packages/core:
     dependencies:

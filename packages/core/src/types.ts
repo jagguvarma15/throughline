@@ -203,12 +203,15 @@ export interface TokenBudget {
   consume(n: number): void;
 }
 
-export interface StepOptions {
+export interface StepOptions<T = unknown> {
   retry?: Partial<RetryPolicy>;
   idempotencyKey?: string;
   kind?: StepKind;
-  /** A-priori token cost for this step: `estimate` gates BEFORE fn, `cost` is charged after. */
-  budget?: { estimate?: number; cost?: number };
+  /**
+   * Token budgeting for this step. `estimate` gates BEFORE fn runs; `cost` is charged AFTER
+   * success — a number, or a function of the result (e.g. actual model usage).
+   */
+  budget?: { estimate?: number; cost?: number | ((result: T) => number) };
 }
 
 export interface Context {
@@ -216,7 +219,7 @@ export interface Context {
   readonly attempt: number;
   readonly logger: Logger;
   readonly tokens: TokenBudget;
-  step<T>(name: string, fn: () => Promise<T>, opts?: StepOptions): Promise<T>;
+  step<T>(name: string, fn: () => Promise<T>, opts?: StepOptions<T>): Promise<T>;
   /** Durable timer: suspend until `ms` have elapsed, surviving restarts. */
   sleep(name: string, ms: number): Promise<void>;
   /** Durably wait for a signalled event; optionally time out. */

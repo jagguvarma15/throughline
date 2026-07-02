@@ -1,0 +1,34 @@
+{
+  "name": "@throughline/adapters-llm",
+  "version": "0.1.0",
+  "description": "Throughline BYO-LLM helpers: wrap a user-provided model call in a durable step.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@throughline/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@throughline/store-sqlite": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

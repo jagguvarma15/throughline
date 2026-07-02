@@ -1,32 +1,22 @@
-version: '3.8'
-
-# Complete production-ready stack
-# Run with: docker-compose -f docker-compose.full.yml up
+# Complete reference stack: application + monitoring.
+# Run with: docker compose -f docker-compose.full.yml up
 
 services:
-  # Include all services from previous phases
-  # Application stack
   postgres:
     extends:
       file: docker-compose.yml
       service: postgres
 
-  redis:
-    extends:
-      file: docker-compose.yml  
-      service: redis
-
-  backend:
+  control-plane:
     extends:
       file: docker-compose.yml
-      service: backend
+      service: control-plane
 
-  frontend:
+  dashboard:
     extends:
       file: docker-compose.yml
-      service: frontend
+      service: dashboard
 
-  # Monitoring stack
   prometheus:
     extends:
       file: docker-compose.monitoring.yml
@@ -42,4 +32,13 @@ services:
       file: docker-compose.monitoring.yml
       service: cadvisor
 
-# Add load balancer, backup services, etc.
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  throughline_network:
+    driver: bridge
+  monitoring_network:
+    driver: bridge
