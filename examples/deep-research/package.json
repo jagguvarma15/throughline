@@ -1,0 +1,22 @@
+{
+  "name": "@throughline/example-deep-research",
+  "version": "0.1.0",
+  "description": "Killer demo: a durable, resumable, budget-bounded research agent.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/run.ts --format esm --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@throughline/adapters-llm": "workspace:*",
+    "@throughline/core": "workspace:*",
+    "@throughline/store-sqlite": "workspace:*"
+  },
+  "devDependencies": {
+    "@throughline/testing": "workspace:*"
+  }
+}
