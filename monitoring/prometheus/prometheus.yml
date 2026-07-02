@@ -12,9 +12,9 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'taskflow-backend'
+  - job_name: 'throughline-control-plane'
     static_configs:
-      - targets: ['taskflow_backend:3001']
+      - targets: ['throughline_control_plane:3001']
     metrics_path: '/metrics'
     scrape_interval: 30s
 
