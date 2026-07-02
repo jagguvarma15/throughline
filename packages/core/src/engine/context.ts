@@ -69,7 +69,7 @@ export class RunContext implements Context {
     return n;
   }
 
-  async step<T>(name: string, fn: () => Promise<T>, opts?: StepOptions): Promise<T> {
+  async step<T>(name: string, fn: () => Promise<T>, opts?: StepOptions<T>): Promise<T> {
     // Ordinal is assigned synchronously at the call site, before any await (guarantees §4).
     const ordinal = this.#ordinals.next(name);
     const key = stepKey(name, ordinal, opts?.idempotencyKey);
@@ -92,7 +92,7 @@ export class RunContext implements Context {
     });
   }
 
-  async #runStep<T>(key: string, fn: () => Promise<T>, opts?: StepOptions): Promise<T> {
+  async #runStep<T>(key: string, fn: () => Promise<T>, opts?: StepOptions<T>): Promise<T> {
     const policy = resolveRetry(this.#d.defaultRetry, opts?.retry);
 
     const existing = this.#d.journal.get(key);
@@ -114,7 +114,9 @@ export class RunContext implements Context {
     }
 
     // Budget gate: a fresh step is refused BEFORE fn runs if it cannot be afforded (§8).
-    const estimate = opts?.budget?.estimate ?? opts?.budget?.cost;
+    // Only a numeric a-priori estimate can gate before fn; a function cost is charged after.
+    const rawCost = opts?.budget?.cost;
+    const estimate = opts?.budget?.estimate ?? (typeof rawCost === "number" ? rawCost : undefined);
     if (estimate !== undefined && this.tokens.remaining() < estimate) {
       throw new BudgetExceededError(this.tokens.limit, this.tokens.consumed, estimate);
     }
@@ -153,7 +155,7 @@ export class RunContext implements Context {
       }
       // fn succeeded. Journaling failures (incl. LeaseLostError) propagate so the run
       // is abandoned and replayed by another worker — NOT retried (avoids double effects).
-      const cost = opts?.budget?.cost ?? 0;
+      const cost = typeof rawCost === "function" ? rawCost(output) : (rawCost ?? 0);
       this.tokens.consume(cost);
       await this.#d.store.appendStep({
         workflowId: this.#d.workflow.id,
