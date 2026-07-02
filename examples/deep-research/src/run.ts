@@ -5,6 +5,9 @@ import { slowMockModel } from "./model";
 
 // A tiny CLI for the manual kill-and-resume demo (see kill-and-resume.sh).
 const DB = process.env.THROUGHLINE_DB ?? "deep-research.db";
+// A shorter lease lets a killed worker's orphaned lease expire quickly so another worker
+// reclaims the run without a long wait. Defaults to 5s; the demo script sets it lower.
+const leaseMs = Number(process.env.THROUGHLINE_LEASE_MS ?? 5000);
 const [cmd, arg] = process.argv.slice(2);
 
 const store = sqlite(DB);
@@ -24,7 +27,7 @@ switch (cmd) {
   }
   case "work": {
     console.log("worker started — kill -9 mid-run, then run 'work' again to resume");
-    tf.worker({ leaseMs: 5000, pollIntervalMs: 200 }).start();
+    tf.worker({ leaseMs, pollIntervalMs: 200 }).start();
     break; // stay alive
   }
   case "approve": {
