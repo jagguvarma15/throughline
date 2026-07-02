@@ -14,7 +14,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "check:deps": "node scripts/check-forbidden-deps.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
