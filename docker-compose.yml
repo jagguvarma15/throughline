@@ -1,111 +1,65 @@
 services:
-  # PostgreSQL Database
+  # Postgres — the production durability store.
   postgres:
-    image: postgres:15-alpine
-    container_name: taskflow_postgres
+    image: postgres:16-alpine
+    container_name: throughline_postgres
     environment:
-      POSTGRES_DB: taskflow
-      POSTGRES_USER: taskflow
-      POSTGRES_PASSWORD: taskflow_password
+      POSTGRES_DB: throughline
+      POSTGRES_USER: throughline
+      POSTGRES_PASSWORD: throughline
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taskflow"]
+      test: ["CMD-SHELL", "pg_isready -U throughline"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - taskflow_network
+      - throughline_network
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: taskflow_redis
-    command: redis-server --requirepass redispass
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redispass", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - taskflow_network
-
-  # Backend API
-  backend:
+  # Control-plane — thin read/op API over the store (durability lives in the worker).
+  control-plane:
     build:
-      context: ./backend
-      target: production
-    image: taskflow-backend
-    container_name: taskflow_backend
+      context: .
+      dockerfile: apps/control-plane/Dockerfile
+    image: throughline-control-plane
+    container_name: throughline_control_plane
     ports:
       - "3001:3001"
     environment:
-      NODE_ENV: production
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: taskflow
-      DB_PASSWORD: taskflow_password
-      DB_NAME: taskflow
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: redispass
+      PORT: 3001
+      DATABASE_URL: postgres://throughline:throughline@postgres:5432/throughline
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test:
+        ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
-      - taskflow_network
+      - throughline_network
 
-  # Frontend React App
-  frontend:
+  # Dashboard — durable-run UI (static build served by nginx).
+  dashboard:
     build:
-      context: ./frontend
-      target: production
-    image: taskflow-frontend
-    container_name: taskflow_frontend
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    image: throughline-dashboard
+    container_name: throughline_dashboard
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      - control-plane
     networks:
-      - taskflow_network
-
-  # Development profile - Frontend with hot reload
-  frontend-dev:
-    profiles: ["dev"]
-    build:
-      context: ./frontend
-      target: development
-    image: taskflow-frontend-dev
-    container_name: taskflow_frontend_dev
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-    environment:
-      - WATCHPACK_POLLING=true
-    depends_on:
-      - backend
-    networks:
-      - taskflow_network
+      - throughline_network
 
 volumes:
   postgres_data:
-  redis_data:
 
 networks:
-  taskflow_network:
+  throughline_network:
     driver: bridge
