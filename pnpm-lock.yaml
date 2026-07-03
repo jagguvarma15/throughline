@@ -95,6 +95,25 @@ importers:
         specifier: ^6.0.5
         version: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)
 
+  examples/ai-sdk-agent:
+    dependencies:
+      '@throughline/adapters-ai-sdk':
+        specifier: workspace:*
+        version: link:../../packages/adapters-ai-sdk
+      '@throughline/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@throughline/store-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/store-sqlite
+      ai:
+        specifier: ^7.0.14
+        version: 7.0.14(zod@3.25.76)
+    devDependencies:
+      '@throughline/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   examples/deep-research:
     dependencies:
       '@throughline/adapters-llm':
