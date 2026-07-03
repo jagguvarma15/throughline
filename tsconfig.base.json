@@ -19,6 +19,7 @@
     "paths": {
       "@throughline/core": ["./packages/core/src/index.ts"],
       "@throughline/adapters-llm": ["./packages/adapters-llm/src/index.ts"],
+      "@throughline/adapters-ai-sdk": ["./packages/adapters-ai-sdk/src/index.ts"],
       "@throughline/store-sqlite": ["./packages/store-sqlite/src/index.ts"],
       "@throughline/store-postgres": ["./packages/store-postgres/src/index.ts"],
       "@throughline/testing": ["./packages/testing/src/index.ts"]
