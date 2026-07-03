@@ -1,0 +1,48 @@
+name: Bug report
+description: Something behaves differently than docs/guarantees.md promises
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Throughline version
+      placeholder: "0.2.0 (or commit SHA if using the repo)"
+    validations:
+      required: true
+  - type: dropdown
+    id: store
+    attributes:
+      label: Store backend
+      options:
+        - SQLite
+        - Postgres
+        - Both / other
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: "20.x"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: >-
+        Smallest task/worker setup that shows the problem. If it involves a crash or
+        replay, say where the crash lands (step key) — `faultStore` from
+        @throughline/testing is great for pinning this down.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: >-
+        What should have happened (cite docs/guarantees.md if applicable) and what
+        happened instead. Include the run's journal (step keys + statuses) if relevant.
+    validations:
+      required: true
