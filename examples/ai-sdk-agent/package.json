@@ -1,0 +1,23 @@
+{
+  "name": "@throughline/example-ai-sdk-agent",
+  "version": "0.1.0",
+  "description": "A durable Vercel AI SDK tool-calling agent: crash-safe release-notes drafter.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/run.ts --format esm --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@throughline/adapters-ai-sdk": "workspace:*",
+    "@throughline/core": "workspace:*",
+    "@throughline/store-sqlite": "workspace:*",
+    "ai": "^7.0.14"
+  },
+  "devDependencies": {
+    "@throughline/testing": "workspace:*"
+  }
+}
