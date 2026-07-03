@@ -14,7 +14,8 @@ import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 
 type WrapGenerate = NonNullable<LanguageModelMiddleware["wrapGenerate"]>;
 type GenerateResult = Awaited<ReturnType<WrapGenerate>>;
-type WrappableModel = Parameters<typeof wrapLanguageModel>[0]["model"];
+/** Any model `wrapLanguageModel` accepts — useful for app-layer dependency interfaces. */
+export type WrappableModel = Parameters<typeof wrapLanguageModel>[0]["model"];
 type WrappedModel = ReturnType<typeof wrapLanguageModel>;
 
 export interface DurableModelOptions {
