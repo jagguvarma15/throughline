@@ -15,16 +15,24 @@
     "test": "pnpm -r --if-present test",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "check:deps": "node scripts/check-forbidden-deps.mjs"
+    "check:deps": "node scripts/check-forbidden-deps.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm -r build && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "better-sqlite3"]
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "esbuild",
+      "better-sqlite3"
+    ]
   }
 }
