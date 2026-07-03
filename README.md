@@ -83,6 +83,7 @@ halts a runaway loop at a token budget, and replays its whole trajectory offline
 | `@throughline/store-sqlite` | Default durable store (better-sqlite3). |
 | `@throughline/store-postgres` | Production durable store (pg). |
 | `@throughline/adapters-llm` | BYO-LLM helper: wrap a model call in a durable step. |
+| `@throughline/adapters-ai-sdk` | Vercel AI SDK adapter: durable `generateText` model calls + exactly-once tools. |
 | `@throughline/testing` | Fault-injection store, store/engine conformance, property + golden-trace harness. |
 | `apps/control-plane` | Thin read/op HTTP API over the store (`/runs`, signal, cancel, `/health`, `/metrics`). |
 | `apps/dashboard` | Durable-run UI (runs, timeline, approvals, replay). |
