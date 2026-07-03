@@ -75,6 +75,11 @@ randomized crash schedules; zero duplicated idempotency-keyed effects), not asse
 after a `kill -9` with no duplicate model calls, pauses for human approval before publishing,
 halts a runaway loop at a token budget, and replays its whole trajectory offline for ~$0.
 
+**[examples/ai-sdk-agent](examples/ai-sdk-agent)** is the same durability applied to a
+[Vercel AI SDK](https://ai-sdk.dev) tool-calling loop via `@throughline/adapters-ai-sdk`:
+each `generateText` model call and tool execution is a journaled step, so the loop itself
+crash-resumes with exactly-once tool effects.
+
 ## Packages
 
 | Package | Purpose |
