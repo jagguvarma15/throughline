@@ -22,6 +22,9 @@ builder, or a hosted platform.
 
 ## Install
 
+> **Status:** not yet published to npm — the release pipeline is in place, but until the
+> first publish lands, clone the repo and use the pnpm workspace (see Development).
+
 ```bash
 pnpm add @throughline/core @throughline/store-sqlite
 ```
@@ -75,6 +78,11 @@ randomized crash schedules; zero duplicated idempotency-keyed effects), not asse
 after a `kill -9` with no duplicate model calls, pauses for human approval before publishing,
 halts a runaway loop at a token budget, and replays its whole trajectory offline for ~$0.
 
+**[examples/ai-sdk-agent](examples/ai-sdk-agent)** is the same durability applied to a
+[Vercel AI SDK](https://ai-sdk.dev) tool-calling loop via `@throughline/adapters-ai-sdk`:
+each `generateText` model call and tool execution is a journaled step, so the loop itself
+crash-resumes with exactly-once tool effects.
+
 ## Packages
 
 | Package | Purpose |
@@ -83,6 +91,7 @@ halts a runaway loop at a token budget, and replays its whole trajectory offline
 | `@throughline/store-sqlite` | Default durable store (better-sqlite3). |
 | `@throughline/store-postgres` | Production durable store (pg). |
 | `@throughline/adapters-llm` | BYO-LLM helper: wrap a model call in a durable step. |
+| `@throughline/adapters-ai-sdk` | Vercel AI SDK adapter: durable `generateText` model calls + exactly-once tools. |
 | `@throughline/testing` | Fault-injection store, store/engine conformance, property + golden-trace harness. |
 | `apps/control-plane` | Thin read/op HTTP API over the store (`/runs`, signal, cancel, `/health`, `/metrics`). |
 | `apps/dashboard` | Durable-run UI (runs, timeline, approvals, replay). |

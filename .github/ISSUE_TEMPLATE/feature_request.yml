@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose an addition or change
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to build, and where does Throughline get in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behavior
+      description: Sketch the API you wish existed. Pseudo-code welcome.
+      render: ts
+  - type: dropdown
+    id: package
+    attributes:
+      label: Which package?
+      options:
+        - "@throughline/core"
+        - "@throughline/store-sqlite or store-postgres"
+        - "@throughline/adapters-ai-sdk"
+        - "@throughline/adapters-llm"
+        - "@throughline/testing"
+        - control-plane / dashboard
+        - new package
+        - not sure
+    validations:
+      required: true

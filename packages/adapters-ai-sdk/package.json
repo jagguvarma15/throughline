@@ -1,0 +1,39 @@
+{
+  "name": "@throughline/adapters-ai-sdk",
+  "version": "0.1.0",
+  "description": "Durable Vercel AI SDK adapter: journal every model call and tool execution as a Throughline step.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@throughline/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "ai": "^7.0.0"
+  },
+  "devDependencies": {
+    "@throughline/store-sqlite": "workspace:*",
+    "@throughline/testing": "workspace:*",
+    "ai": "^7.0.14"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
