@@ -1,6 +1,6 @@
 {
   "name": "@throughline/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Throughline durable-execution core engine: throughline(), task(), ctx, worker, replay.",
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,9 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",

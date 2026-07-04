@@ -1,6 +1,6 @@
 {
   "name": "@throughline/store-postgres",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Throughline production durable store backed by pg (Postgres).",
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,9 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
