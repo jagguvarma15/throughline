@@ -11,13 +11,12 @@ on:
 concurrency: release-${{ github.ref }}
 
 jobs:
-  version-pr:
-    name: Open or update the Version Packages PR
+  version:
+    name: Commit version bumps to main
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,16 +33,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Collects pending .changeset/*.md entries into a "Version Packages" PR
-      # (version bumps + CHANGELOGs). Merging that PR is still not a publish.
-      - name: Create Version Packages PR
-        uses: changesets/action@v1
-        with:
-          version: pnpm version-packages
-          title: "Version Packages"
-          commit: "Version packages"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Applies pending .changeset/*.md entries (version bumps + CHANGELOGs) and pushes
+      # the result straight to main — no PR, so this works without the "Actions may
+      # create pull requests" repo setting. GITHUB_TOKEN pushes don't re-trigger
+      # workflows, so this cannot loop. Versioning is still not a publish.
+      - name: Version packages and push
+        run: |
+          if ! ls .changeset/*.md 2>/dev/null | grep -v README.md >/dev/null; then
+            echo "No pending changesets."
+            exit 0
+          fi
+          pnpm version-packages
+          pnpm install --lockfile-only
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Version packages"
+          git push origin main
 
   publish:
     name: Publish to npm (manual)
