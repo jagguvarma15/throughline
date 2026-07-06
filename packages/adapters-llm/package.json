@@ -1,6 +1,6 @@
 {
   "name": "@through-line/adapters-llm",
-  "version": "0.2.0",
+  "version": "0.2.179",
   "description": "Throughline BYO-LLM helpers: wrap a user-provided model call in a durable step.",
   "license": "MIT",
   "keywords": ["durable-execution", "llm", "ai-agents", "byo-llm", "throughline"],
