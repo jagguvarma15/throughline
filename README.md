@@ -22,9 +22,6 @@ builder, or a hosted platform.
 
 ## Install
 
-> **Status:** not yet published to npm — the release pipeline is in place, but until the
-> first publish lands, clone the repo and use the pnpm workspace (see Development).
-
 ```bash
 pnpm add @through-line/core @through-line/store-sqlite
 ```
