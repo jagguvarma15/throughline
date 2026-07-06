@@ -3,6 +3,27 @@
   "version": "0.2.0",
   "description": "Throughline durable-execution core engine: throughline(), task(), ctx, worker, replay.",
   "license": "MIT",
+  "keywords": [
+    "durable-execution",
+    "workflow",
+    "ai-agents",
+    "checkpointing",
+    "replay",
+    "exactly-once",
+    "human-in-the-loop",
+    "token-budget"
+  ],
+  "author": "Jagadesh Varma Nadimpalli",
+  "homepage": "https://github.com/jagguvarma15/throughline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagguvarma15/throughline.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/jagguvarma15/throughline/issues",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -37,6 +58,7 @@
     }
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
