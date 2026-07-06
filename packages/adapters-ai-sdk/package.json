@@ -3,6 +3,26 @@
   "version": "0.2.0",
   "description": "Durable Vercel AI SDK adapter: journal every model call and tool execution as a Throughline step.",
   "license": "MIT",
+  "keywords": [
+    "durable-execution",
+    "ai-sdk",
+    "vercel-ai-sdk",
+    "ai-agents",
+    "tool-calling",
+    "exactly-once",
+    "throughline"
+  ],
+  "author": "Jagadesh Varma Nadimpalli",
+  "homepage": "https://github.com/jagguvarma15/throughline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagguvarma15/throughline.git",
+    "directory": "packages/adapters-ai-sdk"
+  },
+  "bugs": "https://github.com/jagguvarma15/throughline/issues",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -34,6 +54,7 @@
     "ai": "^7.0.14"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
