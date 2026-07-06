@@ -3,6 +3,18 @@
   "version": "0.2.0",
   "description": "Throughline BYO-LLM helpers: wrap a user-provided model call in a durable step.",
   "license": "MIT",
+  "keywords": ["durable-execution", "llm", "ai-agents", "byo-llm", "throughline"],
+  "author": "Jagadesh Varma Nadimpalli",
+  "homepage": "https://github.com/jagguvarma15/throughline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagguvarma15/throughline.git",
+    "directory": "packages/adapters-llm"
+  },
+  "bugs": "https://github.com/jagguvarma15/throughline/issues",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -29,6 +41,7 @@
     "@through-line/store-sqlite": "workspace:*"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
