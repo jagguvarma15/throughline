@@ -3,6 +3,25 @@
   "version": "0.2.0",
   "description": "Throughline default durable store backed by better-sqlite3.",
   "license": "MIT",
+  "keywords": [
+    "durable-execution",
+    "sqlite",
+    "better-sqlite3",
+    "workflow",
+    "journal",
+    "throughline"
+  ],
+  "author": "Jagadesh Varma Nadimpalli",
+  "homepage": "https://github.com/jagguvarma15/throughline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagguvarma15/throughline.git",
+    "directory": "packages/store-sqlite"
+  },
+  "bugs": "https://github.com/jagguvarma15/throughline/issues",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -34,6 +53,7 @@
     "@types/better-sqlite3": "^7.6.11"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
