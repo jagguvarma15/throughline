@@ -1,4 +1,4 @@
-import type { CallModel } from "@throughline/adapters-llm";
+import type { CallModel } from "@through-line/adapters-llm";
 
 /**
  * A deterministic stand-in for a real model call. Swap this for a wrapper around your

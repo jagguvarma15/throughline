@@ -155,12 +155,12 @@ an internal `CancelledError` at the next step boundary. `cancelled` is distinct 
 ## 11. Storage & migrations
 
 `store.init()` is **idempotent**: running it repeatedly is safe and never destroys data.
-The same `Store` interface is implemented by `@throughline/store-sqlite` (default, local)
-and `@throughline/store-postgres` (production); the entire core test suite runs unchanged
+The same `Store` interface is implemented by `@through-line/store-sqlite` (default, local)
+and `@through-line/store-postgres` (production); the entire core test suite runs unchanged
 against both.
 
 ---
 
 *Status: v0.1 in progress. These guarantees are proven by the fault-injection + property
-suites (`@throughline/testing`) and the parameterized store/engine conformance batteries,
+suites (`@through-line/testing`) and the parameterized store/engine conformance batteries,
 not asserted in prose alone.*

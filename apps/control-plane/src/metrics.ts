@@ -1,4 +1,4 @@
-import type { StoreStats } from "@throughline/core";
+import type { StoreStats } from "@through-line/core";
 
 /** Render store stats as Prometheus text exposition format (replaces the old Math.random metrics). */
 export function renderMetrics(s: StoreStats): string {

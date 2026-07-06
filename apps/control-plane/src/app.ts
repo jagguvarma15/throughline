@@ -1,4 +1,4 @@
-import type { Store, WorkflowStatus } from "@throughline/core";
+import type { Store, WorkflowStatus } from "@through-line/core";
 import cors from "cors";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";

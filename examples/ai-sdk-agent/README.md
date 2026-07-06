@@ -1,7 +1,7 @@
 # AI SDK agent — durable release-notes drafter
 
 A [Vercel AI SDK](https://ai-sdk.dev) tool-calling agent made durable by
-`@throughline/adapters-ai-sdk`: **model → `getCommits` tool → model → human approval →
+`@through-line/adapters-ai-sdk`: **model → `getCommits` tool → model → human approval →
 publish**. The adapter journals each `doGenerate` as its own step and keys the tool step
 by `toolCallId`, so the run gets all of Throughline's guarantees:
 
@@ -21,7 +21,7 @@ offline with no API keys.
 ## Automated proof (runs in CI, offline)
 
 ```
-pnpm --filter @throughline/example-ai-sdk-agent test
+pnpm --filter @through-line/example-ai-sdk-agent test
 ```
 
 Covers crash-resume with zero duplicate model/tool calls, the approval pause, the budget
@@ -30,7 +30,7 @@ halt, and the offline replay.
 ## Manual kill-and-resume
 
 ```
-pnpm --filter @throughline/example-ai-sdk-agent build
+pnpm --filter @through-line/example-ai-sdk-agent build
 cd examples/ai-sdk-agent
 node dist/run.js start            # prints a run id
 node dist/run.js work             # kill -9 this mid-run...

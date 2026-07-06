@@ -33,7 +33,7 @@ body:
       description: >-
         Smallest task/worker setup that shows the problem. If it involves a crash or
         replay, say where the crash lands (step key) — `faultStore` from
-        @throughline/testing is great for pinning this down.
+        @through-line/testing is great for pinning this down.
       render: ts
     validations:
       required: true

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { type Context, type Throughline, throughline } from "@throughline/core";
+import { type Context, type Throughline, throughline } from "@through-line/core";
 import {
   controlledClock,
   goldenExists,
@@ -7,7 +7,7 @@ import {
   seedGolden,
   toGolden,
   writeGolden,
-} from "@throughline/testing";
+} from "@through-line/testing";
 import { describe, expect, it } from "vitest";
 import { sqlite } from "../src/index";
 

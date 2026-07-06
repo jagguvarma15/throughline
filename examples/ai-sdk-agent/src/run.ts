@@ -1,5 +1,5 @@
-import { throughline } from "@throughline/core";
-import { sqlite } from "@throughline/store-sqlite";
+import { throughline } from "@through-line/core";
+import { sqlite } from "@through-line/store-sqlite";
 import { registerDrafter } from "./agent";
 import { slowScriptedModel } from "./model";
 

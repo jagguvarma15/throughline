@@ -2,8 +2,8 @@ import {
   type WrappableModel,
   durableModel,
   durableToolExecute,
-} from "@throughline/adapters-ai-sdk";
-import type { Context, Throughline } from "@throughline/core";
+} from "@through-line/adapters-ai-sdk";
+import type { Context, Throughline } from "@through-line/core";
 import { generateText, jsonSchema, stepCountIs, tool } from "ai";
 
 export interface DraftInput {

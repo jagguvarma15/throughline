@@ -1,4 +1,4 @@
-import { type Context, TimeoutError, throughline } from "@throughline/core";
+import { type Context, TimeoutError, throughline } from "@through-line/core";
 import { describe, expect, it } from "vitest";
 import { controlledClock } from "./clock";
 import { type FaultPlan, faultStore } from "./faultStore";

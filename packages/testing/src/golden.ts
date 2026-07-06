@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { RunState, StepRow, Store } from "@throughline/core";
+import type { RunState, StepRow, Store } from "@through-line/core";
 
 /** A recorded run: input/output plus the journal, enough to replay offline. */
 export interface GoldenTrace {

@@ -1,5 +1,5 @@
-import { type Context, throughline } from "@throughline/core";
-import { sqlite } from "@throughline/store-sqlite";
+import { type Context, throughline } from "@through-line/core";
+import { sqlite } from "@through-line/store-sqlite";
 import { describe, expect, it } from "vitest";
 import { type CallModel, modelStep } from "../src/index";
 

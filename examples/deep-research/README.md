@@ -18,7 +18,7 @@ your provider SDK (OpenAI, Anthropic, …) — Throughline itself never imports 
 ## Automated proof (runs in CI, offline)
 
 ```
-pnpm --filter @throughline/example-deep-research test
+pnpm --filter @through-line/example-deep-research test
 ```
 
 Covers crash-resume with zero duplicate effects, the approval pause, the budget halt, and the
@@ -27,7 +27,7 @@ offline replay.
 ## Manual kill-and-resume
 
 ```
-pnpm --filter @throughline/example-deep-research build
+pnpm --filter @through-line/example-deep-research build
 cd examples/deep-research
 bash kill-and-resume.sh
 ```

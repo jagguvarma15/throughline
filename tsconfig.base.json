@@ -17,12 +17,12 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@throughline/core": ["./packages/core/src/index.ts"],
-      "@throughline/adapters-llm": ["./packages/adapters-llm/src/index.ts"],
-      "@throughline/adapters-ai-sdk": ["./packages/adapters-ai-sdk/src/index.ts"],
-      "@throughline/store-sqlite": ["./packages/store-sqlite/src/index.ts"],
-      "@throughline/store-postgres": ["./packages/store-postgres/src/index.ts"],
-      "@throughline/testing": ["./packages/testing/src/index.ts"]
+      "@through-line/core": ["./packages/core/src/index.ts"],
+      "@through-line/adapters-llm": ["./packages/adapters-llm/src/index.ts"],
+      "@through-line/adapters-ai-sdk": ["./packages/adapters-ai-sdk/src/index.ts"],
+      "@through-line/store-sqlite": ["./packages/store-sqlite/src/index.ts"],
+      "@through-line/store-postgres": ["./packages/store-postgres/src/index.ts"],
+      "@through-line/testing": ["./packages/testing/src/index.ts"]
     },
     "skipLibCheck": true,
     "declaration": true,

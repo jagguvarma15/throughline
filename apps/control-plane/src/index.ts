@@ -1,6 +1,6 @@
-import type { Store } from "@throughline/core";
-import { postgres } from "@throughline/store-postgres";
-import { sqlite } from "@throughline/store-sqlite";
+import type { Store } from "@through-line/core";
+import { postgres } from "@through-line/store-postgres";
+import { sqlite } from "@through-line/store-sqlite";
 import { createApp } from "./app";
 import logger from "./logger";
 

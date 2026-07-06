@@ -1,5 +1,5 @@
 {
-  "name": "@throughline/adapters-llm",
+  "name": "@through-line/adapters-llm",
   "version": "0.2.0",
   "description": "Throughline BYO-LLM helpers: wrap a user-provided model call in a durable step.",
   "license": "MIT",
@@ -23,10 +23,10 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@throughline/core": "workspace:*"
+    "@through-line/core": "workspace:*"
   },
   "devDependencies": {
-    "@throughline/store-sqlite": "workspace:*"
+    "@through-line/store-sqlite": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

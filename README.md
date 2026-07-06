@@ -26,14 +26,14 @@ builder, or a hosted platform.
 > first publish lands, clone the repo and use the pnpm workspace (see Development).
 
 ```bash
-pnpm add @throughline/core @throughline/store-sqlite
+pnpm add @through-line/core @through-line/store-sqlite
 ```
 
 ## Quickstart
 
 ```ts
-import { throughline } from "@throughline/core";
-import { sqlite } from "@throughline/store-sqlite";
+import { throughline } from "@through-line/core";
+import { sqlite } from "@through-line/store-sqlite";
 
 const tf = throughline({ store: sqlite("./throughline.db") });
 
@@ -79,7 +79,7 @@ after a `kill -9` with no duplicate model calls, pauses for human approval befor
 halts a runaway loop at a token budget, and replays its whole trajectory offline for ~$0.
 
 **[examples/ai-sdk-agent](examples/ai-sdk-agent)** is the same durability applied to a
-[Vercel AI SDK](https://ai-sdk.dev) tool-calling loop via `@throughline/adapters-ai-sdk`:
+[Vercel AI SDK](https://ai-sdk.dev) tool-calling loop via `@through-line/adapters-ai-sdk`:
 each `generateText` model call and tool execution is a journaled step, so the loop itself
 crash-resumes with exactly-once tool effects.
 
@@ -87,12 +87,12 @@ crash-resumes with exactly-once tool effects.
 
 | Package | Purpose |
 |---|---|
-| `@throughline/core` | Durable engine: `throughline()`, `task()`, `ctx`, worker, replay, retries, budgets, OTel. |
-| `@throughline/store-sqlite` | Default durable store (better-sqlite3). |
-| `@throughline/store-postgres` | Production durable store (pg). |
-| `@throughline/adapters-llm` | BYO-LLM helper: wrap a model call in a durable step. |
-| `@throughline/adapters-ai-sdk` | Vercel AI SDK adapter: durable `generateText` model calls + exactly-once tools. |
-| `@throughline/testing` | Fault-injection store, store/engine conformance, property + golden-trace harness. |
+| `@through-line/core` | Durable engine: `throughline()`, `task()`, `ctx`, worker, replay, retries, budgets, OTel. |
+| `@through-line/store-sqlite` | Default durable store (better-sqlite3). |
+| `@through-line/store-postgres` | Production durable store (pg). |
+| `@through-line/adapters-llm` | BYO-LLM helper: wrap a model call in a durable step. |
+| `@through-line/adapters-ai-sdk` | Vercel AI SDK adapter: durable `generateText` model calls + exactly-once tools. |
+| `@through-line/testing` | Fault-injection store, store/engine conformance, property + golden-trace harness. |
 | `apps/control-plane` | Thin read/op HTTP API over the store (`/runs`, signal, cancel, `/health`, `/metrics`). |
 | `apps/dashboard` | Durable-run UI (runs, timeline, approvals, replay). |
 

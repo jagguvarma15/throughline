@@ -1,4 +1,4 @@
-import { LeaseLostError, type Store, WorkflowNotFoundError } from "@throughline/core";
+import { LeaseLostError, type Store, WorkflowNotFoundError } from "@through-line/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 export type StoreFactory = () => Store | Promise<Store>;

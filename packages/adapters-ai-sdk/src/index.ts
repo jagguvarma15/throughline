@@ -1,4 +1,4 @@
-import { type Context, NonRetryableError, type RetryPolicy } from "@throughline/core";
+import { type Context, NonRetryableError, type RetryPolicy } from "@through-line/core";
 import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 
 /**
@@ -58,7 +58,7 @@ export function durableMiddleware(
     },
     wrapStream: () => {
       throw new NonRetryableError(
-        "@throughline/adapters-ai-sdk does not support streaming: a journal entry is a single JSON value. Use generateText/generateObject, or stream only outside durable steps.",
+        "@through-line/adapters-ai-sdk does not support streaming: a journal entry is a single JSON value. Use generateText/generateObject, or stream only outside durable steps.",
       );
     },
   };

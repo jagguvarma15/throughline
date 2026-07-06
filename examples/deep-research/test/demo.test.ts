@@ -1,13 +1,13 @@
-import type { CallModel } from "@throughline/adapters-llm";
-import { throughline } from "@throughline/core";
-import { sqlite } from "@throughline/store-sqlite";
+import type { CallModel } from "@through-line/adapters-llm";
+import { throughline } from "@through-line/core";
+import { sqlite } from "@through-line/store-sqlite";
 import {
   type FaultPlan,
   controlledClock,
   faultStore,
   seedGolden,
   toGolden,
-} from "@throughline/testing";
+} from "@through-line/testing";
 import { describe, expect, it } from "vitest";
 import { registerResearch } from "../src/agent";
 import { mockModel } from "../src/model";

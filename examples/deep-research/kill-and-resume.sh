@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Proves a run survives `kill -9` mid-execution and resumes from the journal with no
 # duplicate model calls or side effects, then pauses for human approval before publishing.
-# Requires a prior build:  pnpm --filter @throughline/example-deep-research build
+# Requires a prior build:  pnpm --filter @through-line/example-deep-research build
 set -euo pipefail
 
 export THROUGHLINE_DB="$(mktemp -d)/deep-research.db"

@@ -20,11 +20,11 @@ body:
     attributes:
       label: Which package?
       options:
-        - "@throughline/core"
-        - "@throughline/store-sqlite or store-postgres"
-        - "@throughline/adapters-ai-sdk"
-        - "@throughline/adapters-llm"
-        - "@throughline/testing"
+        - "@through-line/core"
+        - "@through-line/store-sqlite or store-postgres"
+        - "@through-line/adapters-ai-sdk"
+        - "@through-line/adapters-llm"
+        - "@through-line/testing"
         - control-plane / dashboard
         - new package
         - not sure

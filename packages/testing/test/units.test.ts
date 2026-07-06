@@ -1,4 +1,4 @@
-import { type AppendStepInput, LeaseLostError, type Store } from "@throughline/core";
+import { type AppendStepInput, LeaseLostError, type Store } from "@through-line/core";
 import { describe, expect, it } from "vitest";
 import { controlledClock } from "../src/clock";
 import { faultStore } from "../src/faultStore";

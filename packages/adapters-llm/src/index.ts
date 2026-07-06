@@ -1,4 +1,4 @@
-import type { Context, RetryPolicy } from "@throughline/core";
+import type { Context, RetryPolicy } from "@through-line/core";
 
 export interface ModelUsage {
   inputTokens?: number;
@@ -14,7 +14,7 @@ export interface ModelResponse {
 /**
  * The BYO-LLM seam: a user-provided async function that calls their model. Wrapping the
  * provider SDK in this shape keeps all provider dependencies in the application layer —
- * @throughline/core never imports an LLM SDK.
+ * @through-line/core never imports an LLM SDK.
  */
 export type CallModel<Req = unknown, Res extends ModelResponse = ModelResponse> = (
   req: Req,

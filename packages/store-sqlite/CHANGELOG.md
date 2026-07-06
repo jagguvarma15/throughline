@@ -1,10 +1,10 @@
-# @throughline/store-sqlite
+# @through-line/store-sqlite
 
 ## 0.2.0
 
 ### Minor Changes
 
-- 074ffee: First adoptable release. New `@throughline/adapters-ai-sdk` package makes Vercel AI SDK
+- 074ffee: First adoptable release. New `@through-line/adapters-ai-sdk` package makes Vercel AI SDK
   (`ai@^7`) agent loops durable: `durableModel`/`durableMiddleware` journal every
   `generateText` model call as its own step, and `durableToolExecute` keys tool executions
   by `toolCallId` for exactly-once effects across crashes — proven by crash-resume and
@@ -16,4 +16,4 @@
 ### Patch Changes
 
 - Updated dependencies [074ffee]
-  - @throughline/core@0.2.0
+  - @through-line/core@0.2.0

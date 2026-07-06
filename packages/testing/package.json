@@ -1,5 +1,5 @@
 {
-  "name": "@throughline/testing",
+  "name": "@through-line/testing",
   "version": "0.2.0",
   "description": "Throughline test harness: fault-injection store, store/engine conformance suites, record/replay.",
   "license": "MIT",
@@ -23,7 +23,7 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@throughline/core": "workspace:*"
+    "@through-line/core": "workspace:*"
   },
   "peerDependencies": {
     "vitest": ">=2"

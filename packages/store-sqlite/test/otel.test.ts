@@ -5,8 +5,8 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { throughline } from "@throughline/core";
-import { controlledClock } from "@throughline/testing";
+import { throughline } from "@through-line/core";
+import { controlledClock } from "@through-line/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { sqlite } from "../src/index";
 

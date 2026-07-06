@@ -5,6 +5,6 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "fixed": [["@throughline/*"]],
+  "fixed": [["@through-line/*"]],
   "privatePackages": { "version": false, "tag": false }
 }

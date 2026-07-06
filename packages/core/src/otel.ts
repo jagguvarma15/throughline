@@ -27,7 +27,7 @@ export async function loadTracing(): Promise<Tracing | null> {
   const api = await loadApi();
   if (!api) return null;
   return {
-    tracer: api.trace.getTracer("@throughline/core", "0.1.0"),
+    tracer: api.trace.getTracer("@through-line/core", "0.1.0"),
     ok: api.SpanStatusCode.OK,
     error: api.SpanStatusCode.ERROR,
   };

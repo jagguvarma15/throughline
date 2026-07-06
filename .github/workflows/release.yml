@@ -5,7 +5,7 @@ on:
     branches: [main]
   # Publishing is a deliberate human decision: it only runs via manual dispatch,
   # and only once the repo owner has added an NPM_TOKEN secret (and owns the
-  # @throughline scope on npm).
+  # @through-line scope on npm).
   workflow_dispatch:
 
 concurrency: release-${{ github.ref }}
@@ -72,7 +72,7 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "$NPM_TOKEN" ]; then
-            echo "::error::NPM_TOKEN secret is not set. Create an npm automation token for the @throughline scope and add it as a repository secret before publishing."
+            echo "::error::NPM_TOKEN secret is not set. Create an npm automation token for the @through-line scope and add it as a repository secret before publishing."
             exit 1
           fi
 

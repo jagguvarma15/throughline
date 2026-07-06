@@ -31,16 +31,16 @@ THROUGHLINE_TEST_PG=postgres://throughline:throughline@localhost:5433/throughlin
 
 ## The BYO-LLM rule
 
-No published `@throughline/*` package may depend on an LLM **provider** SDK
+No published `@through-line/*` package may depend on an LLM **provider** SDK
 (`openai`, `@anthropic-ai/*`, `@ai-sdk/openai`, ...). Provider bindings belong in the
 application layer — `examples/` and `apps/`. The provider-neutral `ai` package is the
-one allowed exception, in `@throughline/adapters-ai-sdk`. CI enforces this via
+one allowed exception, in `@through-line/adapters-ai-sdk`. CI enforces this via
 `scripts/check-forbidden-deps.mjs`.
 
 ## Testing conventions
 
 - Engine/store semantics belong in the shared conformance suites
-  (`@throughline/testing`'s `defineStoreSuite` / `defineEngineSuite`) so every store
+  (`@through-line/testing`'s `defineStoreSuite` / `defineEngineSuite`) so every store
   proves them, not just one.
 - Crash behavior is tested with `faultStore` (injects a committed-write-then-lease-lost
   crash at step boundaries) and `controlledClock` — no sleeps, no flakes.
@@ -55,7 +55,7 @@ Every user-facing change needs a changeset in the same PR:
 pnpm changeset            # pick the affected packages and a bump level
 ```
 
-All `@throughline/*` packages version in lockstep (a `fixed` group). CI opens a
+All `@through-line/*` packages version in lockstep (a `fixed` group). CI opens a
 "Version Packages" PR on `main`; publishing to npm is a separate, manually dispatched
 workflow.
 

@@ -1,4 +1,4 @@
-// @throughline/core — durable-execution engine public surface.
+// @through-line/core — durable-execution engine public surface.
 
 export * from "./errors";
 export * from "./types";

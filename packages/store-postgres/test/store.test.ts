@@ -1,4 +1,4 @@
-import { type StoreFactory, defineEngineSuite, defineStoreSuite } from "@throughline/testing";
+import { type StoreFactory, defineEngineSuite, defineStoreSuite } from "@through-line/testing";
 import pg from "pg";
 import { afterAll, describe } from "vitest";
 import { postgres } from "../src/index";

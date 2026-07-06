@@ -1,5 +1,5 @@
 {
-  "name": "@throughline/store-postgres",
+  "name": "@through-line/store-postgres",
   "version": "0.2.0",
   "description": "Throughline production durable store backed by pg (Postgres).",
   "license": "MIT",
@@ -23,11 +23,11 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@throughline/core": "workspace:*",
+    "@through-line/core": "workspace:*",
     "pg": "^8.13.1"
   },
   "devDependencies": {
-    "@throughline/testing": "workspace:*",
+    "@through-line/testing": "workspace:*",
     "@types/pg": "^8.11.10"
   },
   "publishConfig": {

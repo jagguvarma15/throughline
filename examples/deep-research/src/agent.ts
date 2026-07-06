@@ -1,6 +1,6 @@
-import type { CallModel } from "@throughline/adapters-llm";
-import { modelStep } from "@throughline/adapters-llm";
-import type { Context, Throughline } from "@throughline/core";
+import type { CallModel } from "@through-line/adapters-llm";
+import { modelStep } from "@through-line/adapters-llm";
+import type { Context, Throughline } from "@through-line/core";
 
 export interface ResearchInput {
   topic: string;

@@ -1,4 +1,4 @@
-import type { Clock } from "@throughline/core";
+import type { Clock } from "@through-line/core";
 
 export interface ControlledClock extends Clock {
   advance(ms: number): void;

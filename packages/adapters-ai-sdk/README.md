@@ -1,4 +1,4 @@
-# @throughline/adapters-ai-sdk
+# @through-line/adapters-ai-sdk
 
 Durable [Vercel AI SDK](https://ai-sdk.dev) adapter for Throughline: every raw model call
 and tool execution becomes a journaled step, so a `generateText` tool loop survives
@@ -11,7 +11,7 @@ Throughline stays bring-your-own-LLM — provider bindings (`@ai-sdk/openai`,
 ## Usage
 
 ```ts
-import { durableModel, durableToolExecute } from "@throughline/adapters-ai-sdk";
+import { durableModel, durableToolExecute } from "@through-line/adapters-ai-sdk";
 import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 
@@ -81,4 +81,4 @@ encoding — the `Uint8Array` form is not restored).
   replayable stream. Use `generateText`/`generateObject` inside tasks, or stream only in
   code that doesn't need durability.
 - **`ai` v5/v6** — the middleware targets the v4 language-model spec (`ai@^7`). On older
-  majors, wrap calls with `modelStep` from `@throughline/adapters-llm` instead.
+  majors, wrap calls with `modelStep` from `@through-line/adapters-llm` instead.

@@ -1,5 +1,5 @@
 {
-  "name": "@throughline/adapters-ai-sdk",
+  "name": "@through-line/adapters-ai-sdk",
   "version": "0.2.0",
   "description": "Durable Vercel AI SDK adapter: journal every model call and tool execution as a Throughline step.",
   "license": "MIT",
@@ -23,14 +23,14 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@throughline/core": "workspace:*"
+    "@through-line/core": "workspace:*"
   },
   "peerDependencies": {
     "ai": "^7.0.0"
   },
   "devDependencies": {
-    "@throughline/store-sqlite": "workspace:*",
-    "@throughline/testing": "workspace:*",
+    "@through-line/store-sqlite": "workspace:*",
+    "@through-line/testing": "workspace:*",
     "ai": "^7.0.14"
   },
   "publishConfig": {

@@ -29,13 +29,13 @@ importers:
 
   apps/control-plane:
     dependencies:
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@throughline/store-postgres':
+      '@through-line/store-postgres':
         specifier: workspace:*
         version: link:../../packages/store-postgres
-      '@throughline/store-sqlite':
+      '@through-line/store-sqlite':
         specifier: workspace:*
         version: link:../../packages/store-sqlite
       cors:
@@ -100,49 +100,49 @@ importers:
 
   examples/ai-sdk-agent:
     dependencies:
-      '@throughline/adapters-ai-sdk':
+      '@through-line/adapters-ai-sdk':
         specifier: workspace:*
         version: link:../../packages/adapters-ai-sdk
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@throughline/store-sqlite':
+      '@through-line/store-sqlite':
         specifier: workspace:*
         version: link:../../packages/store-sqlite
       ai:
         specifier: ^7.0.14
         version: 7.0.14(zod@3.25.76)
     devDependencies:
-      '@throughline/testing':
+      '@through-line/testing':
         specifier: workspace:*
         version: link:../../packages/testing
 
   examples/deep-research:
     dependencies:
-      '@throughline/adapters-llm':
+      '@through-line/adapters-llm':
         specifier: workspace:*
         version: link:../../packages/adapters-llm
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@throughline/store-sqlite':
+      '@through-line/store-sqlite':
         specifier: workspace:*
         version: link:../../packages/store-sqlite
     devDependencies:
-      '@throughline/testing':
+      '@through-line/testing':
         specifier: workspace:*
         version: link:../../packages/testing
 
   packages/adapters-ai-sdk:
     dependencies:
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@throughline/store-sqlite':
+      '@through-line/store-sqlite':
         specifier: workspace:*
         version: link:../store-sqlite
-      '@throughline/testing':
+      '@through-line/testing':
         specifier: workspace:*
         version: link:../testing
       ai:
@@ -151,11 +151,11 @@ importers:
 
   packages/adapters-llm:
     dependencies:
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@throughline/store-sqlite':
+      '@through-line/store-sqlite':
         specifier: workspace:*
         version: link:../store-sqlite
 
@@ -171,14 +171,14 @@ importers:
 
   packages/store-postgres:
     dependencies:
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../core
       pg:
         specifier: ^8.13.1
         version: 8.22.0
     devDependencies:
-      '@throughline/testing':
+      '@through-line/testing':
         specifier: workspace:*
         version: link:../testing
       '@types/pg':
@@ -187,7 +187,7 @@ importers:
 
   packages/store-sqlite:
     dependencies:
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../core
       better-sqlite3:
@@ -203,7 +203,7 @@ importers:
       '@opentelemetry/sdk-trace-base':
         specifier: ^2.0.0
         version: 2.8.0(@opentelemetry/api@1.9.1)
-      '@throughline/testing':
+      '@through-line/testing':
         specifier: workspace:*
         version: link:../testing
       '@types/better-sqlite3':
@@ -212,7 +212,7 @@ importers:
 
   packages/testing:
     dependencies:
-      '@throughline/core':
+      '@through-line/core':
         specifier: workspace:*
         version: link:../core
       vitest:

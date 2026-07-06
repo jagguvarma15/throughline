@@ -1,12 +1,12 @@
-import { throughline } from "@throughline/core";
-import { sqlite } from "@throughline/store-sqlite";
+import { throughline } from "@through-line/core";
+import { sqlite } from "@through-line/store-sqlite";
 import {
   type FaultPlan,
   controlledClock,
   faultStore,
   seedGolden,
   toGolden,
-} from "@throughline/testing";
+} from "@through-line/testing";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
 import { registerDrafter } from "../src/agent";

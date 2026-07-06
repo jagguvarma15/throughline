@@ -11,7 +11,7 @@ import {
   type StoreStats,
   type WorkflowPatch,
   type WorkflowRow,
-} from "@throughline/core";
+} from "@through-line/core";
 
 export interface FaultPlan {
   /** Simulate a crash right after the step with this key commits (before the next op). */

@@ -17,7 +17,7 @@ import {
   type WorkflowStatus,
   systemClock,
   uuid,
-} from "@throughline/core";
+} from "@through-line/core";
 import Database from "better-sqlite3";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema";
 

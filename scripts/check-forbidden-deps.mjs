@@ -1,4 +1,4 @@
-// Dependency hygiene: no published @throughline/* package may depend on an LLM provider
+// Dependency hygiene: no published @through-line/* package may depend on an LLM provider
 // SDK. Providers live only in the application layer (examples/, apps/). The bare `ai`
 // package is allowed in adapters-ai-sdk: it is Vercel's provider-NEUTRAL SDK — the
 // provider bindings live in @ai-sdk/* packages, which stay forbidden. Wired into CI.

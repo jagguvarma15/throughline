@@ -1,4 +1,4 @@
-// @throughline/testing — conformance, fault-injection, property, and record/replay harness.
+// @through-line/testing — conformance, fault-injection, property, and record/replay harness.
 
 export { defineStoreSuite } from "./harness";
 export { defineEngineSuite } from "./engineSuite";

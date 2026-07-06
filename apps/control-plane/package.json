@@ -1,5 +1,5 @@
 {
-  "name": "@throughline/control-plane",
+  "name": "@through-line/control-plane",
   "version": "0.1.0",
   "description": "Throughline control-plane: thin read/op HTTP API over the durable store.",
   "license": "MIT",
@@ -13,9 +13,9 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@throughline/core": "workspace:*",
-    "@throughline/store-postgres": "workspace:*",
-    "@throughline/store-sqlite": "workspace:*",
+    "@through-line/core": "workspace:*",
+    "@through-line/store-postgres": "workspace:*",
+    "@through-line/store-sqlite": "workspace:*",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
