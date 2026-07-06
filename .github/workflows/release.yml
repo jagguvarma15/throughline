@@ -97,3 +97,18 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
+
+      # All @through-line/* packages version in lockstep, so one unified vX.Y.Z tag and
+      # GitHub release represent the whole publish (changesets' per-package tags are
+      # suppressed via --no-git-tag). Idempotent so a re-dispatch doesn't fail.
+      - name: Tag and create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./packages/core/package.json').version")
+          if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+          fi
+          gh release view "v$VERSION" >/dev/null 2>&1 || \
+            gh release create "v$VERSION" --title "v$VERSION" --generate-notes
