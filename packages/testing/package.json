@@ -3,6 +3,26 @@
   "version": "0.2.0",
   "description": "Throughline test harness: fault-injection store, store/engine conformance suites, record/replay.",
   "license": "MIT",
+  "keywords": [
+    "durable-execution",
+    "testing",
+    "fault-injection",
+    "chaos",
+    "golden-trace",
+    "conformance",
+    "throughline"
+  ],
+  "author": "Jagadesh Varma Nadimpalli",
+  "homepage": "https://github.com/jagguvarma15/throughline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagguvarma15/throughline.git",
+    "directory": "packages/testing"
+  },
+  "bugs": "https://github.com/jagguvarma15/throughline/issues",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -29,6 +49,7 @@
     "vitest": ">=2"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
