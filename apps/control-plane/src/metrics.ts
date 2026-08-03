@@ -16,6 +16,9 @@ export function renderMetrics(s: StoreStats): string {
     "# HELP throughline_tokens_total Tokens consumed across steps",
     "# TYPE throughline_tokens_total counter",
     `throughline_tokens_total ${s.tokenSum}`,
+    "# HELP throughline_recovery_attempts_max Highest crash-recovery count across live runs",
+    "# TYPE throughline_recovery_attempts_max gauge",
+    `throughline_recovery_attempts_max ${s.maxRecoveryAttempts}`,
   );
   return `${lines.join("\n")}\n`;
 }
