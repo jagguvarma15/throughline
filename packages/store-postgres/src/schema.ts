@@ -1,7 +1,15 @@
 // Postgres schema. JSON as JSONB; epoch-ms timestamps + seq as BIGINT/INTEGER.
-// CREATE ... IF NOT EXISTS makes init() idempotent (guarantees §11).
+// Migrations form a versioned ladder: init() applies every version above the one
+// recorded in schema_version, inside a transaction, and refuses to run against a
+// database NEWER than this code (guarantees §11). Each step is idempotent
+// (IF NOT EXISTS) so a half-applied ladder is safe to re-run.
 
-export const SCHEMA_SQL = `
+export interface Migration {
+  version: number;
+  sql: string;
+}
+
+const V1_SQL = `
 CREATE TABLE IF NOT EXISTS workflows (
   id                TEXT PRIMARY KEY,
   name              TEXT NOT NULL,
@@ -61,4 +69,15 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 `;
 
-export const SCHEMA_VERSION = 1;
+// v2: partial index for the claim query's unconsumed-event branch.
+const V2_SQL = `
+CREATE INDEX IF NOT EXISTS idx_events_unconsumed ON events(workflow_id, name)
+  WHERE consumed_at IS NULL;
+`;
+
+export const MIGRATIONS: Migration[] = [
+  { version: 1, sql: V1_SQL },
+  { version: 2, sql: V2_SQL },
+];
+
+export const SCHEMA_VERSION = 2;
