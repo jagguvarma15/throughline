@@ -52,7 +52,8 @@ const research = tf.task("research", async (ctx, input: { topic: string }) => {
 
 // Drive runs from outside; a worker claims, executes, heartbeats, and records them.
 const id = await tf.start("research", { topic: "sea otters" });
-await tf.worker({ concurrency: 4 }).start();
+const worker = tf.worker({ concurrency: 4 });
+worker.start(); // begins the poll loops; call `await worker.stop()` to drain on shutdown
 
 // Later, from your control-plane / UI:
 await tf.signal(id, "publish", { approved: true });
