@@ -71,6 +71,37 @@ describe("cli", () => {
     expect(stats.json().workflowsByStatus.completed).toBe(1);
     expect(stats.json().workflowsByStatus.cancelled).toBe(1);
 
+    // Redrive: a dead run retries; anything else refuses.
+    tf.task("boom", async (ctx) =>
+      ctx.step(
+        "x",
+        async () => {
+          throw new Error("boom");
+        },
+        { retry: { maxAttempts: 1, backoff: "fixed", baseMs: 1, jitter: false } },
+      ),
+    );
+    const deadId = await tf.start("boom", null);
+    await tf.worker({ leaseMs: 1000, workerId: "w" }).runOnce();
+    expect((await tf.getRun(deadId))?.status).toBe("dead");
+    const retried = capture();
+    expect(await runCli(["retry", deadId, "--db", db], retried.io, ENV)).toBe(0);
+    expect(retried.json()).toEqual({ result: "retried" });
+    const notDead = capture();
+    expect(await runCli(["retry", deadId, "--db", db], notDead.io, ENV)).toBe(1);
+
+    const pruned = capture();
+    expect(await runCli(["prune", "--older-than", "1h", "--db", db], pruned.io, ENV)).toBe(0);
+    expect(pruned.json()).toEqual({ pruned: 0 });
+    const noTtl = capture();
+    expect(await runCli(["prune", "--db", db], noTtl.io, ENV)).toBe(1);
+
+    const migrated = capture();
+    expect(await runCli(["migrate", "--db", db], migrated.io, ENV)).toBe(0);
+    expect(migrated.json()).toEqual({ ok: true });
+    const overHttp = capture();
+    expect(await runCli(["migrate", "--url", "http://127.0.0.1:9"], overHttp.io, ENV)).toBe(1);
+
     await store.close();
   });
 
