@@ -102,14 +102,27 @@ crash-resumes with exactly-once tool effects.
 # CLI: JSON in, JSON out - works directly on the store or against a control-plane URL.
 npx @through-line/cli list --status waiting
 npx @through-line/cli approve <run-id> publish
+npx @through-line/cli retry <run-id>                 # redrive a dead run, journal preserved
+npx @through-line/cli prune --older-than 7d          # terminal-run GC
+npx @through-line/cli migrate                        # apply store schema migrations
 
 # MCP: let Claude (or any MCP host) start, watch, and approve durable runs.
 claude mcp add throughline --env THROUGHLINE_DB=./throughline.db -- npx @through-line/mcp
 ```
 
 The MCP server exposes `start_run`, `wait_for_run`, `get_run`, `approve_run`,
-`signal_run`, `cancel_run`, and `get_stats` - see [docs/mcp.md](docs/mcp.md). Runs can
-also be started over HTTP (`POST /runs` on the control-plane, bearer-token auth).
+`signal_run`, `cancel_run`, `retry_run`, and `get_stats` - see [docs/mcp.md](docs/mcp.md).
+Runs can also be started over HTTP (`POST /runs` on the control-plane, bearer-token
+auth). Workers take a `retention` option for opportunistic terminal-run GC, and dead
+runs surface in the dashboard's Dead letter view with one-click redrive.
+
+## Recipes
+
+[Wrap your existing loop](docs/recipes/wrap-your-loop.md),
+[human approval](docs/recipes/human-approval.md),
+[record/replay testing](docs/recipes/record-replay-testing.md),
+[budgets](docs/recipes/budgets.md). AI-friendly indexes: [llms.txt](llms.txt) and
+[AGENTS.md](AGENTS.md); `pnpm docs:api` generates the API reference.
 
 ## Reference stack
 
