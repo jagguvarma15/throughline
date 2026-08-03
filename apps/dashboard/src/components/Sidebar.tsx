@@ -3,6 +3,7 @@ import type { View } from "../App";
 const ITEMS: Array<{ id: View; label: string }> = [
   { id: "runs", label: "Runs" },
   { id: "approvals", label: "Approvals" },
+  { id: "dead", label: "Dead letter" },
 ];
 
 export function Sidebar({ view, onView }: { view: View; onView: (v: View) => void }) {
