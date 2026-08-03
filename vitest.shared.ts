@@ -11,4 +11,6 @@ export const alias: Record<string, string> = {
   "@through-line/store-sqlite": resolve(root, "packages/store-sqlite/src/index.ts"),
   "@through-line/store-postgres": resolve(root, "packages/store-postgres/src/index.ts"),
   "@through-line/testing": resolve(root, "packages/testing/src/index.ts"),
+  "@through-line/cli": resolve(root, "packages/cli/src/index.ts"),
+  "@through-line/mcp": resolve(root, "packages/mcp/src/index.ts"),
 };
