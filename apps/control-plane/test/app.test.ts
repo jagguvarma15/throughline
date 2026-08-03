@@ -16,6 +16,15 @@ async function setup(opts: AppOptions = ANON) {
   const tf = throughline({ store, sleep: async () => {} });
   tf.task("t", async (ctx) => ctx.step("a", async () => 1));
   tf.task("appr", async (ctx) => ctx.waitForApproval("go"));
+  tf.task("boom", async (ctx) =>
+    ctx.step(
+      "x",
+      async () => {
+        throw new Error("boom");
+      },
+      { retry: { maxAttempts: 1, backoff: "fixed", baseMs: 1, jitter: false } },
+    ),
+  );
   return { store, tf, app: createApp(store, opts) };
 }
 
@@ -87,6 +96,27 @@ describe("control-plane", () => {
     await request(app).post("/runs").send({ input: 1 }).expect(400);
     await request(app).post("/runs").send({ name: "" }).expect(400);
     await request(app).post("/runs").send({ name: "t", id: 42 }).expect(400);
+  });
+
+  it("retries only dead runs, and prunes via the admin endpoint", async () => {
+    const { tf, app } = await setup();
+    const id = await tf.start("boom", null);
+    await tf.worker({ leaseMs: 1000 }).runOnce();
+    expect((await tf.getRun(id))?.status).toBe("dead");
+
+    const retried = await request(app).post(`/runs/${id}/retry`).expect(200);
+    expect(retried.body.result).toBe("retried");
+    expect((await tf.getRun(id))?.status).toBe("pending");
+    await request(app).post(`/runs/${id}/retry`).expect(409); // pending now, not dead
+    await request(app).post("/runs/does-not-exist/retry").expect(404);
+
+    const metrics = await request(app).get("/metrics").expect(200);
+    expect(metrics.text).toContain("throughline_recovery_attempts_max");
+
+    const pruned = await request(app).post("/admin/prune").send({ olderThan: "1h" }).expect(200);
+    expect(pruned.body).toEqual({ pruned: 0 }); // nothing is an hour old yet
+    await request(app).post("/admin/prune").send({}).expect(400);
+    await request(app).post("/admin/prune").send({ olderThan: "1h", limit: "x" }).expect(400);
   });
 
   it("validates list query params instead of passing them to SQL", async () => {
