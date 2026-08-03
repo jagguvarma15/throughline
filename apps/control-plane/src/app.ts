@@ -194,6 +194,44 @@ export function createApp(store: Store, opts: AppOptions = {}): Express {
     }),
   );
 
+  app.post(
+    "/runs/:id/retry",
+    guard,
+    wrap(async (req, res) => {
+      try {
+        const result = await ops.retry(req.params.id ?? "");
+        if (result === "not-dead") {
+          res.status(409).json({ error: "only dead runs can be retried" });
+          return;
+        }
+        res.json({ result });
+      } catch (e) {
+        if (e instanceof WorkflowNotFoundError) {
+          res.status(404).json({ error: "run not found" });
+          return;
+        }
+        throw e;
+      }
+    }),
+  );
+
+  app.post(
+    "/admin/prune",
+    guard,
+    wrap(async (req, res) => {
+      const body = (req.body ?? {}) as { olderThan?: unknown; limit?: unknown };
+      if (typeof body.olderThan !== "string" && typeof body.olderThan !== "number") {
+        res.status(400).json({ error: "olderThan (duration string or ms) is required" });
+        return;
+      }
+      if (body.limit !== undefined && typeof body.limit !== "number") {
+        res.status(400).json({ error: "limit must be a number" });
+        return;
+      }
+      res.json(await ops.prune({ olderThan: body.olderThan, limit: body.limit }));
+    }),
+  );
+
   app.use(errorHandler);
   return app;
 }
