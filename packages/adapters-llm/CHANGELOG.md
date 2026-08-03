@@ -1,5 +1,14 @@
 # @through-line/adapters-llm
 
+## 0.3.0
+
+### Patch Changes
+
+- Updated dependencies [f980bdf]
+- Updated dependencies [88ca599]
+- Updated dependencies [478bde3]
+  - @through-line/core@0.3.0
+
 ## 0.2.179
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@through-line/cli",
-  "version": "0.2.179",
+  "version": "0.3.0",
   "description": "Throughline CLI: start, inspect, signal, approve, and cancel durable runs from the terminal.",
   "license": "MIT",
   "keywords": ["durable-execution", "cli", "ai-agents", "workflow", "throughline"],

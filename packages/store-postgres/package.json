@@ -1,6 +1,6 @@
 {
   "name": "@through-line/store-postgres",
-  "version": "0.2.179",
+  "version": "0.3.0",
   "description": "Throughline production durable store backed by pg (Postgres).",
   "license": "MIT",
   "keywords": ["durable-execution", "postgres", "postgresql", "workflow", "journal", "throughline"],
