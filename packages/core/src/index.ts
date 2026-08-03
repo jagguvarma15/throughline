@@ -9,6 +9,7 @@ export * from "./retry";
 export * from "./budget";
 export * from "./duration";
 export * from "./logger";
+export * from "./ops";
 export * from "./throughline";
 export { Worker } from "./engine/worker";
 export type { WorkerDeps } from "./engine/worker";
