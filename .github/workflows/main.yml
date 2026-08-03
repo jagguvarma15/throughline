@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main, redesign]
+  # No branch filter: stacked PRs (base = another feature branch) also get CI.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -65,6 +65,10 @@ jobs:
 
       - name: Build
         run: pnpm -r build
+
+      - name: API docs (typedoc, non-blocking)
+        run: pnpm docs:api
+        continue-on-error: true
 
   security:
     name: Trivy filesystem scan
