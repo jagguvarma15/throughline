@@ -160,10 +160,6 @@ importers:
         version: link:../store-sqlite
 
   packages/core:
-    dependencies:
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
     devDependencies:
       '@opentelemetry/api':
         specifier: ^1.9.0
