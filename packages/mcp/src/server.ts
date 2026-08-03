@@ -190,6 +190,26 @@ export function createThroughlineMcpServer(ops: Ops, opts: ThroughlineMcpOptions
   );
 
   server.registerTool(
+    "retry_run",
+    {
+      title: "Retry run",
+      description:
+        "Redrive a dead run: reset it to pending with the journal preserved, so completed steps replay instead of re-running. Only dead runs can be retried. This is a mutating action.",
+      inputSchema: { id: z.string() },
+    },
+    async ({ id }) => {
+      try {
+        const result = await ops.retry(id);
+        if (result === "not-dead") return errorResult(`run ${id} is not dead; cannot retry`);
+        return jsonResult({ result });
+      } catch (e) {
+        if (e instanceof WorkflowNotFoundError) return errorResult(`run not found: ${id}`);
+        throw e;
+      }
+    },
+  );
+
+  server.registerTool(
     "get_stats",
     {
       title: "Get stats",
