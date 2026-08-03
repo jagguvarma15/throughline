@@ -2,15 +2,18 @@ import {
   type AppendStepInput,
   type Clock,
   type ConsumeEventInput,
+  DEFAULT_PRUNE_STATUSES,
   type EventRow,
   type Fence,
   LeaseLostError,
   type ListWorkflowsOptions,
   type NewWorkflow,
+  type PruneOptions,
   type SerializedError,
   type StepRow,
   type Store,
   type StoreStats,
+  TERMINAL_STATUSES,
   WorkflowNotFoundError,
   type WorkflowPatch,
   type WorkflowRow,
@@ -19,7 +22,7 @@ import {
   uuid,
 } from "@through-line/core";
 import pg from "pg";
-import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema";
+import { MIGRATIONS, SCHEMA_VERSION } from "./schema";
 
 const { Pool } = pg;
 type PgPool = pg.Pool;
@@ -185,11 +188,25 @@ export class PostgresStore implements Store {
   }
 
   async init(): Promise<void> {
-    await this.#pool.query(SCHEMA_SQL);
-    const r = await this.#pool.query("SELECT version FROM schema_version LIMIT 1");
-    if (r.rowCount === 0) {
-      await this.#pool.query("INSERT INTO schema_version (version) VALUES ($1)", [SCHEMA_VERSION]);
-    }
+    // Bootstrap the version table so the ladder can read where this database stands.
+    await this.#pool.query("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
+    await this.#tx(async (c) => {
+      const r = await c.query<{ version: number }>(
+        "SELECT version FROM schema_version LIMIT 1 FOR UPDATE",
+      );
+      const current = r.rows[0]?.version ?? 0;
+      if (current > SCHEMA_VERSION) {
+        throw new Error(
+          `database schema is v${current} but this store only knows v${SCHEMA_VERSION}: upgrade @through-line/store-postgres, or point it at an older database`,
+        );
+      }
+      for (const m of MIGRATIONS) {
+        if (m.version > current) await c.query(m.sql);
+      }
+      if (current === SCHEMA_VERSION) return;
+      if (r.rows[0]) await c.query("UPDATE schema_version SET version=$1", [SCHEMA_VERSION]);
+      else await c.query("INSERT INTO schema_version (version) VALUES ($1)", [SCHEMA_VERSION]);
+    });
   }
 
   /** Test helper: drop all rows. Not part of the Store interface; never called by init(). */
@@ -223,22 +240,36 @@ export class PostgresStore implements Store {
 
   async claim(workerId: string, leaseMs: number, now: number): Promise<WorkflowRow | null> {
     return this.#tx(async (c) => {
-      const sel = await c.query<RawWf>(
-        `SELECT * FROM workflows WHERE
-            status='pending'
-            OR (status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at < $1)
-            OR (status='waiting' AND wake_at IS NOT NULL AND wake_at <= $1)
-            OR (status='waiting' AND wait_event IS NOT NULL AND EXISTS (
-                  SELECT 1 FROM events e
-                  WHERE e.workflow_id = workflows.id
-                    AND e.name = workflows.wait_event
-                    AND e.consumed_at IS NULL))
-         ORDER BY updated_at ASC
-         LIMIT 1
-         FOR UPDATE SKIP LOCKED`,
+      // One targeted, index-backed probe per runnable predicate (a single OR query
+      // cannot use any one index and degrades to a scan of every live row per poll).
+      // Each branch locks its candidate with SKIP LOCKED, so concurrent workers pick
+      // disjoint candidates instead of colliding on one winner.
+      const sel = await c.query<{ id: string }>(
+        `SELECT id FROM (
+            SELECT * FROM (SELECT id, updated_at FROM workflows
+              WHERE status='pending'
+              ORDER BY updated_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED) b1
+            UNION ALL
+            SELECT * FROM (SELECT id, updated_at FROM workflows
+              WHERE status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at < $1
+              ORDER BY updated_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED) b2
+            UNION ALL
+            SELECT * FROM (SELECT id, updated_at FROM workflows
+              WHERE status='waiting' AND wake_at IS NOT NULL AND wake_at <= $1
+              ORDER BY updated_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED) b3
+            UNION ALL
+            SELECT * FROM (SELECT w.id, w.updated_at FROM workflows w
+              WHERE w.status='waiting' AND w.wait_event IS NOT NULL AND EXISTS (
+                SELECT 1 FROM events e
+                WHERE e.workflow_id = w.id AND e.name = w.wait_event AND e.consumed_at IS NULL)
+              ORDER BY w.updated_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED) b4
+          ) c ORDER BY updated_at ASC LIMIT 1`,
         [now],
       );
-      const candidate = sel.rows[0];
+      const winnerId = sel.rows[0]?.id;
+      if (!winnerId) return null;
+      const full = await c.query<RawWf>("SELECT * FROM workflows WHERE id=$1", [winnerId]);
+      const candidate = full.rows[0];
       if (!candidate) return null;
       const delta = candidate.status === "running" ? 1 : 0;
       const upd = await c.query<RawWf>(
@@ -477,12 +508,49 @@ export class PostgresStore implements Store {
     const tk = await this.#pool.query<{ s: string | number }>(
       "SELECT COALESCE(SUM(cost), 0)::bigint AS s FROM steps",
     );
+    const mr = await this.#pool.query<{ m: number }>(
+      `SELECT COALESCE(MAX(recovery_attempts), 0)::int AS m FROM workflows
+       WHERE status IN ('pending','running','waiting')`,
+    );
     return {
       workflowsByStatus,
       stepCount: Number(sc.rows[0]?.c ?? 0),
       failedStepCount: Number(fc.rows[0]?.c ?? 0),
       tokenSum: Number(tk.rows[0]?.s ?? 0),
+      maxRecoveryAttempts: Number(mr.rows[0]?.m ?? 0),
     };
+  }
+
+  async resetFailedSteps(workflowId: string): Promise<number> {
+    const r = await this.#pool.query(
+      "UPDATE steps SET attempts=0 WHERE workflow_id=$1 AND status='failed'",
+      [workflowId],
+    );
+    return r.rowCount ?? 0;
+  }
+
+  async pruneRuns(opts: PruneOptions): Promise<number> {
+    const statuses = opts.statuses ?? DEFAULT_PRUNE_STATUSES;
+    const nonTerminal = statuses.filter((s) => !TERMINAL_STATUSES.has(s));
+    if (nonTerminal.length > 0) {
+      throw new Error(`pruneRuns only deletes terminal runs; got: ${nonTerminal.join(", ")}`);
+    }
+    const limit = opts.limit ?? 1000;
+    const cutoff = opts.now - opts.olderThanMs;
+    return this.#tx(async (c) => {
+      const sel = await c.query<{ id: string }>(
+        `SELECT id FROM workflows WHERE status = ANY($1) AND updated_at < $2
+         LIMIT $3 FOR UPDATE SKIP LOCKED`,
+        [statuses, cutoff, limit],
+      );
+      const ids = sel.rows.map((r) => r.id);
+      if (ids.length === 0) return 0;
+      // Children first: the schema has plain REFERENCES, no ON DELETE CASCADE.
+      await c.query("DELETE FROM steps WHERE workflow_id = ANY($1)", [ids]);
+      await c.query("DELETE FROM events WHERE workflow_id = ANY($1)", [ids]);
+      await c.query("DELETE FROM workflows WHERE id = ANY($1)", [ids]);
+      return ids.length;
+    });
   }
 
   async requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop"> {
