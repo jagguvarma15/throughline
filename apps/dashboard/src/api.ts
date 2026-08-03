@@ -1,4 +1,7 @@
 const BASE = import.meta.env.VITE_CP_URL ?? "http://localhost:3001";
+// Bearer token for a token-protected control-plane (THROUGHLINE_API_TOKEN on the server).
+const TOKEN = import.meta.env.VITE_CP_TOKEN as string | undefined;
+const AUTH_HEADERS: Record<string, string> = TOKEN ? { authorization: `Bearer ${TOKEN}` } : {};
 
 export interface Run {
   id: string;
@@ -29,23 +32,25 @@ async function json<T>(res: Response): Promise<T> {
 export async function listRuns(status?: string): Promise<Run[]> {
   const url = new URL(`${BASE}/runs`);
   if (status) url.searchParams.set("status", status);
-  return (await json<{ runs: Run[] }>(await fetch(url))).runs;
+  return (await json<{ runs: Run[] }>(await fetch(url, { headers: AUTH_HEADERS }))).runs;
 }
 
 export async function getRun(id: string): Promise<{ run: Run; steps: Step[] }> {
-  return json<{ run: Run; steps: Step[] }>(await fetch(`${BASE}/runs/${id}`));
+  return json<{ run: Run; steps: Step[] }>(
+    await fetch(`${BASE}/runs/${id}`, { headers: AUTH_HEADERS }),
+  );
 }
 
 export async function signalRun(id: string, name: string, payload: unknown): Promise<void> {
   await json(
     await fetch(`${BASE}/runs/${id}/signal`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({ name, payload }),
     }),
   );
 }
 
 export async function cancelRun(id: string): Promise<void> {
-  await json(await fetch(`${BASE}/runs/${id}/cancel`, { method: "POST" }));
+  await json(await fetch(`${BASE}/runs/${id}/cancel`, { method: "POST", headers: AUTH_HEADERS }));
 }
