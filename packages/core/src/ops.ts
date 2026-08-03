@@ -3,8 +3,16 @@
 // inspect, signal, and cancel runs, but never executes them - that is the worker's job.
 
 import { type Clock, systemClock } from "./clock";
+import { parseDuration } from "./duration";
 import { WorkflowNotFoundError } from "./errors";
-import type { ListWorkflowsOptions, StepRow, Store, StoreStats, WorkflowRow } from "./types";
+import type {
+  Duration,
+  ListWorkflowsOptions,
+  StepRow,
+  Store,
+  StoreStats,
+  WorkflowRow,
+} from "./types";
 
 export interface StartRunInput {
   /** Task name. NOTE: there is no registry here - starting a task no worker registers
@@ -31,6 +39,14 @@ export interface Ops {
   /** Sugar over signal for waitForApproval gates: payload is { approved }. */
   approve(id: string, name: string, approved?: boolean): Promise<void>;
   cancel(id: string): Promise<"cancelled" | "requested" | "noop">;
+  /**
+   * Redrive a dead run: reset it to pending with a clean error and recovery counter.
+   * The journal is preserved, so completed steps replay instead of re-running.
+   * Returns "not-dead" (without changing anything) for a run in any other status.
+   */
+  retry(id: string): Promise<"retried" | "not-dead">;
+  /** Delete terminal runs older than the TTL. Returns how many were pruned. */
+  prune(opts: { olderThan: Duration; limit?: number }): Promise<{ pruned: number }>;
   stats(): Promise<StoreStats>;
 }
 
@@ -84,6 +100,36 @@ export function createOps(store: Store, clock: Clock = systemClock): Ops {
     async cancel(id: string): Promise<"cancelled" | "requested" | "noop"> {
       await ensureInit();
       return store.requestCancel(id, clock.now());
+    },
+
+    async retry(id: string): Promise<"retried" | "not-dead"> {
+      await ensureInit();
+      const wf = await store.getWorkflow(id);
+      if (!wf) throw new WorkflowNotFoundError(id);
+      if (wf.status !== "dead") return "not-dead";
+      // Exhausted failed rows would re-kill the run on its first replay; give them a
+      // fresh retry budget. Completed rows stay - they replay, not re-run.
+      await store.resetFailedSteps(id);
+      await store.updateWorkflow(id, {
+        status: "pending",
+        error: null,
+        recoveryAttempts: 0,
+        waitEvent: null,
+        wakeAt: null,
+        lockedBy: null,
+        leaseExpiresAt: null,
+      });
+      return "retried";
+    },
+
+    async prune(opts: { olderThan: Duration; limit?: number }): Promise<{ pruned: number }> {
+      await ensureInit();
+      const pruned = await store.pruneRuns({
+        olderThanMs: parseDuration(opts.olderThan),
+        limit: opts.limit,
+        now: clock.now(),
+      });
+      return { pruned };
     },
 
     async stats(): Promise<StoreStats> {
