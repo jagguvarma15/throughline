@@ -1,4 +1,4 @@
-import { type Context, TimeoutError, throughline } from "@through-line/core";
+import { type Context, LeaseLostError, TimeoutError, throughline } from "@through-line/core";
 import { describe, expect, it } from "vitest";
 import { controlledClock } from "./clock";
 import { type FaultPlan, faultStore } from "./faultStore";
@@ -418,6 +418,228 @@ export function defineEngineSuite(makeStore: StoreFactory): void {
       expect(run?.status).toBe("dead");
       expect(run?.error?.type).toBe("BudgetExceededError");
       expect(iterations).toBe(2); // call2 fn never ran; replayed steps not re-run
+      await store.close();
+    });
+
+    it("determinism guard: a step replayed with a different kind dies with NonDeterminismError", async () => {
+      const clock = controlledClock(1000);
+      const plan: FaultPlan = { crashAfterStep: "a#0" };
+      const store = faultStore(await makeStore(), plan);
+      const tf1 = throughline({ store, clock, sleep: noSleep });
+      tf1.task("t", async (ctx) => {
+        await ctx.step("a", async () => 1);
+        await ctx.step("b", async () => 2);
+        return "v1";
+      });
+      const id = await tf1.start("t", null);
+      await tf1.worker({ leaseMs: 1000, workerId: "w1" }).runOnce(); // crash after a#0 commits
+
+      // Divergent redeploy: "a" is now a sleep. Its replay hits the journaled step row.
+      plan.crashAfterStep = undefined;
+      clock.advance(5000);
+      const tf2 = throughline({ store, clock, sleep: noSleep });
+      tf2.task("t", async (ctx) => {
+        await ctx.sleep("a", 10);
+        return "v2";
+      });
+      await tf2.worker({ leaseMs: 1000, workerId: "w2" }).runOnce();
+
+      const run = await tf2.getRun(id);
+      expect(run?.status).toBe("dead");
+      expect(run?.error?.type).toBe("NonDeterminismError");
+      await store.close();
+    });
+
+    it("determinism guard: a dropped journaled step dies with NonDeterminismError at completion", async () => {
+      const clock = controlledClock(1000);
+      const plan: FaultPlan = { crashAfterStep: "b#0" };
+      const store = faultStore(await makeStore(), plan);
+      const tf1 = throughline({ store, clock, sleep: noSleep });
+      tf1.task("t", async (ctx) => {
+        await ctx.step("a", async () => 1);
+        await ctx.step("b", async () => 2);
+        return "v1";
+      });
+      const id = await tf1.start("t", null);
+      await tf1.worker({ leaseMs: 1000, workerId: "w1" }).runOnce(); // a and b commit, then crash
+
+      // Divergent redeploy: step "b" was removed, so its journal row is never replayed.
+      plan.crashAfterStep = undefined;
+      clock.advance(5000);
+      const tf2 = throughline({ store, clock, sleep: noSleep });
+      tf2.task("t", async (ctx) => {
+        await ctx.step("a", async () => 1);
+        return "v2";
+      });
+      await tf2.worker({ leaseMs: 1000, workerId: "w2" }).runOnce();
+
+      const run = await tf2.getRun(id);
+      expect(run?.status).toBe("dead");
+      expect(run?.error?.type).toBe("NonDeterminismError");
+      expect(run?.error?.message).toContain("b#0");
+      await store.close();
+    });
+
+    it("determinism guard: warn mode logs instead of failing the diverged run", async () => {
+      const clock = controlledClock(1000);
+      const plan: FaultPlan = { crashAfterStep: "b#0" };
+      const store = faultStore(await makeStore(), plan);
+      const tf1 = throughline({ store, clock, sleep: noSleep });
+      tf1.task("t", async (ctx) => {
+        await ctx.step("a", async () => 1);
+        await ctx.step("b", async () => 2);
+        return "v1";
+      });
+      const id = await tf1.start("t", null);
+      await tf1.worker({ leaseMs: 1000, workerId: "w1" }).runOnce();
+
+      const warnings: string[] = [];
+      const logger = {
+        debug: () => {},
+        info: () => {},
+        warn: (m: string) => {
+          warnings.push(m);
+        },
+        error: () => {},
+      };
+      plan.crashAfterStep = undefined;
+      clock.advance(5000);
+      const tf2 = throughline({ store, clock, sleep: noSleep, logger, determinism: "warn" });
+      tf2.task("t", async (ctx) => {
+        await ctx.step("a", async () => 1);
+        return "v2";
+      });
+      await tf2.worker({ leaseMs: 1000, workerId: "w2" }).runOnce();
+
+      const run = await tf2.getRun(id);
+      expect(run?.status).toBe("completed");
+      expect(warnings.some((m) => m.includes("b#0"))).toBe(true);
+      await store.close();
+    });
+
+    it("determinism guard: crash mid-Promise.all does not false-positive", async () => {
+      const clock = controlledClock(1000);
+      const plan: FaultPlan = { crashAt: new Set([2]) };
+      const store = faultStore(await makeStore(), plan);
+      const tf = throughline({ store, clock, sleep: noSleep });
+      const calls = { a: 0, b: 0, c: 0 };
+      tf.task("t", async (ctx) => {
+        const [x, y] = await Promise.all([
+          ctx.step("a", async () => {
+            calls.a++;
+            return 1;
+          }),
+          ctx.step("b", async () => {
+            calls.b++;
+            return 2;
+          }),
+        ]);
+        const z = await ctx.step("c", async () => {
+          calls.c++;
+          return x + y;
+        });
+        return z;
+      });
+      const id = await tf.start("t", null);
+      const worker = tf.worker({ leaseMs: 1000, workerId: "w" });
+      await worker.runOnce(); // the second parallel commit crashes; both rows are journaled
+      clock.advance(5000);
+      await worker.runOnce();
+
+      const run = await tf.getRun(id);
+      expect(run?.status).toBe("completed");
+      expect(run?.output).toBe(3);
+      expect(calls).toEqual({ a: 1, b: 1, c: 1 });
+      await store.close();
+    });
+
+    it("ctx.now and ctx.random journal their values and replay them verbatim", async () => {
+      const clock = controlledClock(1000);
+      const plan: FaultPlan = { crashAfterStep: "$random#0" };
+      const store = faultStore(await makeStore(), plan);
+      const tf = throughline({ store, clock, sleep: noSleep });
+      tf.task("t", async (ctx) => {
+        const t = await ctx.now();
+        const r = await ctx.random();
+        return { t, r };
+      });
+      const id = await tf.start("t", null);
+      const worker = tf.worker({ leaseMs: 1000, workerId: "w" });
+      await worker.runOnce(); // $now#0 and $random#0 commit, then the crash
+      const steps = (await tf.getRun(id))?.steps ?? [];
+      const t0 = steps.find((s) => s.stepKey === "$now#0")?.output;
+      const r0 = steps.find((s) => s.stepKey === "$random#0")?.output;
+      expect(t0).toBe(1000);
+
+      plan.crashAfterStep = undefined;
+      clock.advance(5000); // a re-executed ctx.now() would observe 6000
+      await worker.runOnce();
+
+      const run = await tf.getRun(id);
+      expect(run?.status).toBe("completed");
+      expect(run?.output).toEqual({ t: t0, r: r0 });
+      await store.close();
+    });
+
+    it("a run that crashes its worker repeatedly is marked dead by the recovery cap", async () => {
+      const clock = controlledClock(1000);
+      const store = await makeStore();
+      const tf = throughline({ store, clock, sleep: noSleep });
+      let executions = 0;
+      // Throwing LeaseLostError from the handler makes the worker abandon the run,
+      // modelling a worker that dies mid-run on every claim (the poison-pill shape).
+      tf.task("poison", async (ctx) => {
+        executions++;
+        throw new LeaseLostError(ctx.runId);
+      });
+      const id = await tf.start("poison", null);
+      const worker = tf.worker({ leaseMs: 1000, workerId: "w", maxRecoveryAttempts: 3 });
+      let status = "";
+      for (let guard = 0; guard < 20; guard++) {
+        await worker.runOnce();
+        status = (await tf.getRun(id))?.status ?? "";
+        if (status === "dead") break;
+        clock.advance(5000); // expire the lease so the next runOnce re-claims
+      }
+
+      const run = await tf.getRun(id);
+      expect(run?.status).toBe("dead");
+      expect(run?.error?.type).toBe("RecoveryExhaustedError");
+      expect(executions).toBe(4); // 1 fresh claim + maxRecoveryAttempts re-claims, then capped
+      await store.close();
+    });
+
+    it("the step retry budget survives a crash mid-retry-loop", async () => {
+      const clock = controlledClock(1000);
+      const plan: FaultPlan = { crashAfterCommits: 2 };
+      const store = faultStore(await makeStore(), plan);
+      const tf = throughline({ store, clock, sleep: noSleep });
+      let executions = 0;
+      tf.task("flaky", async (ctx) => {
+        await ctx.step(
+          "x",
+          async () => {
+            executions++;
+            throw new Error("boom");
+          },
+          { retry: { maxAttempts: 3, backoff: "fixed", baseMs: 1, jitter: false } },
+        );
+        return "unreachable";
+      });
+      const id = await tf.start("flaky", null);
+      const worker = tf.worker({ leaseMs: 1000, workerId: "w" });
+      await worker.runOnce(); // attempts 1 and 2 journal as failed rows, then the crash
+      expect(executions).toBe(2);
+      expect((await tf.getRun(id))?.status).toBe("running");
+
+      plan.crashAfterCommits = undefined;
+      clock.advance(5000);
+      await worker.runOnce(); // resumes at attempt 3, not attempt 1
+
+      const run = await tf.getRun(id);
+      expect(run?.status).toBe("dead");
+      expect(executions).toBe(3); // total executions across processes == maxAttempts
+      expect(run?.steps[0]?.attempts).toBe(3);
       await store.close();
     });
 

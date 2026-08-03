@@ -1,7 +1,15 @@
 import { type Clock, systemClock } from "../clock";
-import { CancelledError, LeaseLostError, serializeError } from "../errors";
+import { CancelledError, LeaseLostError, RecoveryExhaustedError, serializeError } from "../errors";
 import { silentLogger } from "../logger";
-import type { Fence, Logger, RetryPolicy, Store, TaskRegistration, WorkflowPatch } from "../types";
+import type {
+  DeterminismMode,
+  Fence,
+  Logger,
+  RetryPolicy,
+  Store,
+  TaskRegistration,
+  WorkflowPatch,
+} from "../types";
 import { runWorkflow } from "./run";
 
 const realSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -17,6 +25,13 @@ export interface WorkerDeps {
   leaseMs?: number;
   pollIntervalMs?: number;
   concurrency?: number;
+  /**
+   * Poison-pill guard (guarantees §5): a run re-claimed after crashing more than this
+   * many times is marked `dead` instead of being retried forever. Default 10.
+   */
+  maxRecoveryAttempts?: number;
+  /** Determinism-guard mode (guarantees §4). Default: strict outside production. */
+  determinism?: DeterminismMode;
 }
 
 let workerSeq = 0;
@@ -33,6 +48,8 @@ export class Worker {
   #leaseMs: number;
   #pollIntervalMs: number;
   #concurrency: number;
+  #maxRecoveryAttempts: number;
+  #determinism?: DeterminismMode;
   #running = false;
   #loops: Promise<void>[] = [];
   #initialized = false;
@@ -48,6 +65,8 @@ export class Worker {
     this.#leaseMs = d.leaseMs ?? 30_000;
     this.#pollIntervalMs = d.pollIntervalMs ?? 200;
     this.#concurrency = d.concurrency ?? 1;
+    this.#maxRecoveryAttempts = d.maxRecoveryAttempts ?? 10;
+    this.#determinism = d.determinism;
   }
 
   get id(): string {
@@ -63,6 +82,20 @@ export class Worker {
     const wf = await this.#store.claim(this.#workerId, this.#leaseMs, this.#clock.now());
     if (!wf) return false;
     const fence: Fence = { workerId: this.#workerId, leaseEpoch: wf.leaseEpoch };
+
+    // Poison-pill guard (guarantees §5): recovery_attempts counts crash re-claims only
+    // (waits/wakes do not bump it). Past the cap the run is dead, not retried forever.
+    if (wf.recoveryAttempts > this.#maxRecoveryAttempts) {
+      await this.#safeFinish(
+        wf.id,
+        {
+          status: "dead",
+          error: serializeError(new RecoveryExhaustedError(wf.id, wf.recoveryAttempts)),
+        },
+        fence,
+      );
+      return true;
+    }
 
     const reg = this.#registry.get(wf.name);
     if (!reg) {
@@ -90,6 +123,7 @@ export class Worker {
         logger: this.#logger,
         sleep: this.#sleep,
         checkCancel: async () => (await this.#store.getWorkflow(wf.id))?.cancelRequested ?? false,
+        determinism: this.#determinism,
       });
       if (outcome.status === "completed") {
         await this.#finish(wf.id, { status: "completed", output: outcome.output }, fence);

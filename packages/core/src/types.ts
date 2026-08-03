@@ -4,6 +4,11 @@ import type { SerializedError } from "./errors";
 // Persistence rows (see docs/guarantees.md §11 and the store schema)
 // ---------------------------------------------------------------------------
 
+/**
+ * Terminal failure is `dead` (exhausted retries, budget exceeded, recovery exhausted,
+ * or an unhandled handler error). `failed` is reserved and never assigned by the engine;
+ * it is kept so consumers switching on this union do not break.
+ */
 export type WorkflowStatus =
   | "pending"
   | "running"
@@ -12,6 +17,13 @@ export type WorkflowStatus =
   | "failed"
   | "dead"
   | "cancelled";
+
+/**
+ * Determinism-guard mode (guarantees §4). `strict` throws NonDeterminismError when a
+ * replay diverges from the journal; `warn` logs instead; `off` disables the checks.
+ * Default: `strict` unless NODE_ENV is "production", then `warn`.
+ */
+export type DeterminismMode = "strict" | "warn" | "off";
 
 export type StepStatus = "completed" | "failed";
 export type StepKind = "step" | "sleep" | "event" | "timeout";
@@ -154,7 +166,11 @@ export interface Store {
   appendStep(step: AppendStepInput): Promise<{ seq: number; replayed: boolean }>;
   updateWorkflow(id: string, patch: WorkflowPatch, fence?: Fence): Promise<void>;
   addEvent(workflowId: string, name: string, payload: unknown, now: number): Promise<void>;
-  /** Consume one unconsumed event by name (marks consumed_at). */
+  /**
+   * Consume one unconsumed event by name (marks consumed_at).
+   * @deprecated Not used by the engine (superseded by consumeEventIntoJournal, which is
+   * atomic with journaling). Retained for store tooling; may be removed in a future minor.
+   */
   takeEvent(workflowId: string, name: string, now: number): Promise<EventRow | null>;
   /**
    * Atomically consume a matching unconsumed event AND journal its payload as a step,
@@ -170,6 +186,10 @@ export interface Store {
   listWorkflows(opts?: ListWorkflowsOptions): Promise<WorkflowRow[]>;
   /** Aggregate counts for metrics. */
   stats(): Promise<StoreStats>;
+  /**
+   * @deprecated Not used by the engine (the worker releases leases via an updateWorkflow
+   * patch). Retained for test harnesses; may be removed in a future minor.
+   */
   releaseLease(id: string, fence?: Fence): Promise<void>;
   close(): void | Promise<void>;
 }
@@ -226,6 +246,16 @@ export interface Context {
   waitForEvent<T = unknown>(name: string, opts?: { timeout?: Duration }): Promise<T>;
   /** Sugar over waitForEvent: returns whether the signal approved. */
   waitForApproval(name: string, opts?: { timeout?: Duration }): Promise<boolean>;
+  /**
+   * The current time as a journaled micro-step (guarantees §3): read once, replayed
+   * verbatim, so branching on it is deterministic across replays.
+   */
+  now(): Promise<number>;
+  /**
+   * A random number in [0, 1) as a journaled micro-step (guarantees §3): drawn once,
+   * replayed verbatim, so branching on it is deterministic across replays.
+   */
+  random(): Promise<number>;
   deriveKey(...parts: unknown[]): string;
   maxIterations(n: number): number;
 }

@@ -73,8 +73,27 @@ export class CancelledError extends ThroughlineError {
   }
 }
 
-/** Dev-mode guard: replayed step_key order diverged from the journal (see guarantees §4). */
+/**
+ * Determinism guard: a replay diverged from the journal (see guarantees §4) — a journaled
+ * row was hit with the wrong kind (a renamed/reordered call aliasing into it), or the run
+ * completed leaving journaled steps the replay never consumed (removed/renamed steps).
+ * Thrown in `strict` mode; logged in `warn` mode.
+ */
 export class NonDeterminismError extends ThroughlineError {}
+
+/**
+ * A run was re-claimed after crashing more than maxRecoveryAttempts times and is marked
+ * `dead` instead of being retried forever (poison-pill guard, see guarantees §5).
+ */
+export class RecoveryExhaustedError extends ThroughlineError {
+  readonly workflowId: string;
+  readonly attempts: number;
+  constructor(workflowId: string, attempts: number) {
+    super(`recovery attempts exhausted for workflow ${workflowId} (${attempts})`);
+    this.workflowId = workflowId;
+    this.attempts = attempts;
+  }
+}
 
 /** A durable wait (waitForEvent/waitForApproval) timed out before an event arrived. */
 export class TimeoutError extends ThroughlineError {

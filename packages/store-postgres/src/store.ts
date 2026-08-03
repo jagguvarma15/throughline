@@ -473,8 +473,9 @@ export class PostgresStore implements Store {
     const fc = await this.#pool.query<{ c: number }>(
       "SELECT COUNT(*)::int AS c FROM steps WHERE status='failed'",
     );
-    const tk = await this.#pool.query<{ s: number }>(
-      "SELECT COALESCE(SUM(cost), 0)::int AS s FROM steps",
+    // bigint, not int: a token counter passes 2^31 quickly; pg returns it as a string.
+    const tk = await this.#pool.query<{ s: string | number }>(
+      "SELECT COALESCE(SUM(cost), 0)::bigint AS s FROM steps",
     );
     return {
       workflowsByStatus,

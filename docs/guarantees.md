@@ -65,9 +65,24 @@ of `ctx.step` calls must be reproducible.
 - Nondeterministic **values** (wall-clock, random, model output) are allowed **only inside
   a step**, so they are journaled and replayed.
 - **Never branch control flow on un-journaled nondeterminism.** Loop bounds and conditionals
-  must derive from journaled data, not from live external state. (A dev-mode determinism
-  guard throws `NonDeterminismError` when the replayed `step_key` order diverges from the
-  journal.)
+  must derive from journaled data, not from live external state.
+
+A **determinism guard** enforces this with two checks that are safe under concurrent steps
+(a strict seq-order check would false-positive on legitimate `Promise.all` pairs, so the
+guard is key-addressed instead):
+
+1. **Kind mismatch, checked at every journal hit.** If a replayed call computes a
+   `step_key` whose journal row has a different kind (`step` vs `sleep` vs
+   `event`/`timeout`), a renamed or reordered call is aliasing into the wrong row.
+2. **Unconsumed rows, checked at completion.** When the handler returns, every *completed*
+   journal row must have been replayed by this execution; a leftover row means steps were
+   removed, renamed, or reordered. Checking only at completion means a crash mid-
+   `Promise.all` (one branch journaled, the other not) cannot false-positive.
+
+The mode is set by `throughline({ determinism })`: `strict` throws `NonDeterminismError`
+(the run lands `dead`), `warn` logs and continues, `off` disables. The default is `strict`
+unless `NODE_ENV` is `production`, where it is `warn` — a false positive in production
+should not kill runs.
 
 ## 5. The journal is the source of truth
 
@@ -80,6 +95,12 @@ Every write a worker makes (`appendStep`, `updateWorkflow`, `heartbeat`) is cond
 its epoch; a zombie worker whose lease expired cannot overwrite the state of the worker that
 re-claimed the run (it gets `LeaseLostError` and abandons). The journal's
 `UNIQUE(workflow_id, step_key)` is the backstop that prevents a duplicate step row.
+
+**Poison-pill guard.** `recovery_attempts` counts crash re-claims (re-claims of a `running`
+run whose lease expired; waking a `waiting` run does *not* count). A run re-claimed more
+than `maxRecoveryAttempts` times (worker option, default 10) is marked `dead` with
+`RecoveryExhaustedError` instead of being retried forever — a run that reliably kills its
+worker can no longer starve the queue.
 
 ---
 
@@ -95,9 +116,13 @@ re-claimed the run (it gets `LeaseLostError` and abandons). The journal's
    throw `BudgetExceededError` **before** running `fn`. Run `fn()`.
    - **success** → assign `seq = seq_counter++`; UPSERT the journal row to `completed`
      (with output, seq, attempts, cost); return the output.
-   - **throw** → apply the retry policy (exponential backoff + jitter, increment attempts).
-     When attempts are exhausted, UPSERT the row to `failed` and throw `StepError` (which
-     fails the workflow → `dead`). A `NonRetryableError` fails immediately with no retries.
+   - **throw** → UPSERT the row to `failed` with the cumulative attempt count, then apply
+     the retry policy (exponential backoff + jitter). **Every** failed attempt is journaled,
+     not just the terminal one, so the retry budget survives a crash mid-retry-loop: on
+     resume the attempt counter seeds from the journal and total executions of `fn` stay
+     within `maxAttempts` (modulo the irreducible in-flight window of §2). When attempts
+     are exhausted, throw `StepError` (which fails the workflow → `dead`). A
+     `NonRetryableError` fails immediately with no retries.
 
 `appendStep` is an UPSERT: a `failed` row is updated to `completed` on a successful retry; a
 `completed` row is never overwritten.
@@ -151,6 +176,8 @@ an internal `CancelledError` at the next step boundary. `cancelled` is distinct 
 | `CancelledError` | Internal control flow for cooperative cancellation of a running step. |
 | `LeaseLostError` | A worker's fencing epoch is stale; it abandons the run (does not mark it dead). |
 | `WorkflowNotFoundError` | No workflow exists for the given id. |
+| `NonDeterminismError` | A replay diverged from the journal (§4). Thrown in `strict` mode → `dead`; logged in `warn` mode. |
+| `RecoveryExhaustedError` | A run crashed its worker more than `maxRecoveryAttempts` times and is marked `dead` (§5). |
 
 ## 11. Storage & migrations
 

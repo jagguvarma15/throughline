@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS workflows (
 CREATE INDEX IF NOT EXISTS idx_workflows_status_wake  ON workflows(status, wake_at);
 CREATE INDEX IF NOT EXISTS idx_workflows_status_lease ON workflows(status, lease_expires_at);
 CREATE INDEX IF NOT EXISTS idx_workflows_wait_event   ON workflows(wait_event);
+CREATE INDEX IF NOT EXISTS idx_workflows_runnable     ON workflows(updated_at)
+  WHERE status IN ('pending','running','waiting');
 
 CREATE TABLE IF NOT EXISTS steps (
   id           TEXT PRIMARY KEY,
