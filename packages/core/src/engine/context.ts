@@ -5,6 +5,7 @@ import {
   BudgetExceededError,
   CancelledError,
   LeaseLostError,
+  NonDeterminismError,
   StepError,
   SuspendSignal,
   TimeoutError,
@@ -15,6 +16,7 @@ import type { Tracing } from "../otel";
 import { backoffMs, isNonRetryable, resolveRetry } from "../retry";
 import type {
   Context,
+  DeterminismMode,
   Duration,
   Fence,
   Logger,
@@ -42,6 +44,8 @@ export interface RunContextDeps {
   tracing?: Tracing | null;
   /** Cooperative-cancel probe; checked before each fresh step. */
   checkCancel?: () => Promise<boolean>;
+  /** Determinism-guard mode (guarantees §4). Default: strict outside production. */
+  determinism?: DeterminismMode;
 }
 
 export class RunContext implements Context {
@@ -51,6 +55,9 @@ export class RunContext implements Context {
   readonly tokens: TokenBudget;
   #d: RunContextDeps;
   #ordinals = new OrdinalCounter();
+  #determinism: DeterminismMode;
+  /** step_keys this replay has touched; compared against the journal at completion (§4). */
+  #consumed = new Set<string>();
 
   constructor(d: RunContextDeps) {
     this.#d = d;
@@ -58,6 +65,45 @@ export class RunContext implements Context {
     this.attempt = d.workflow.recoveryAttempts + 1;
     this.logger = d.logger;
     this.tokens = new Budget(d.budgetLimit ?? Number.POSITIVE_INFINITY);
+    this.#determinism =
+      d.determinism ?? (process.env.NODE_ENV === "production" ? "warn" : "strict");
+  }
+
+  /** Determinism-guard sink: throw in strict mode, log in warn mode, ignore when off. */
+  #violation(message: string): void {
+    if (this.#determinism === "off") return;
+    if (this.#determinism === "warn") {
+      this.logger.warn(`non-determinism detected: ${message}`, { workflowId: this.runId });
+      return;
+    }
+    throw new NonDeterminismError(message);
+  }
+
+  /** A journaled row hit with the wrong kind means a renamed/reordered call aliased into it. */
+  #checkKind(existing: StepRow | undefined, expected: string, key: string): void {
+    if (existing && existing.kind !== expected) {
+      this.#violation(
+        `journaled step "${key}" has kind "${existing.kind}" but was replayed with kind "${expected}" - the step sequence diverged from the journal`,
+      );
+    }
+  }
+
+  /**
+   * Called by runWorkflow when the handler returns: every completed journal row must have
+   * been replayed by this execution, else steps were removed, renamed, or reordered (§4).
+   * Only checked at completion so a crash mid-Promise.all cannot false-positive.
+   */
+  verifyJournalConsumed(): void {
+    if (this.#determinism === "off") return;
+    const orphaned: string[] = [];
+    for (const [key, row] of this.#d.journal) {
+      if (row.status === "completed" && !this.#consumed.has(key)) orphaned.push(key);
+    }
+    if (orphaned.length > 0) {
+      this.#violation(
+        `run completed but journaled steps were never replayed: ${orphaned.join(", ")} - steps were removed, renamed, or reordered`,
+      );
+    }
   }
 
   deriveKey(...parts: unknown[]): string {
@@ -96,6 +142,8 @@ export class RunContext implements Context {
     const policy = resolveRetry(this.#d.defaultRetry, opts?.retry);
 
     const existing = this.#d.journal.get(key);
+    this.#consumed.add(key);
+    this.#checkKind(existing, opts?.kind ?? "step", key);
     if (existing?.status === "completed") {
       this.tokens.consume(existing.cost); // reconstruct budget accounting on replay (§8)
       return existing.output as T; // REPLAY: never re-run fn
@@ -136,18 +184,21 @@ export class RunContext implements Context {
         ) {
           throw e;
         }
+        // Journal EVERY failed attempt (cumulative count), not just the terminal one, so
+        // the retry budget survives a crash mid-retry-loop: on resume, line "attempt ="
+        // above seeds from the journaled count and total executions stay <= maxAttempts.
+        const se = serializeError(e);
+        await this.#d.store.appendStep({
+          workflowId: this.#d.workflow.id,
+          stepKey: key,
+          status: "failed",
+          kind: opts?.kind ?? "step",
+          error: se,
+          attempts: attempt,
+          now: this.#d.clock.now(),
+          fence: this.#d.fence,
+        });
         if (isNonRetryable(e) || attempt >= policy.maxAttempts) {
-          const se = serializeError(e);
-          await this.#d.store.appendStep({
-            workflowId: this.#d.workflow.id,
-            stepKey: key,
-            status: "failed",
-            kind: opts?.kind ?? "step",
-            error: se,
-            attempts: attempt,
-            now: this.#d.clock.now(),
-            fence: this.#d.fence,
-          });
           throw new StepError(key, attempt, se.message, e);
         }
         await this.#d.sleep(backoffMs(attempt, policy));
@@ -175,6 +226,8 @@ export class RunContext implements Context {
   async sleep(name: string, ms: number): Promise<void> {
     const key = stepKey(name, this.#ordinals.next(name));
     const existing = this.#d.journal.get(key);
+    this.#consumed.add(key);
+    this.#checkKind(existing, "sleep", key);
     if (existing?.status === "completed") {
       // Journaled deadline; re-suspend with the SAME deadline if a reclaim arrived early.
       const deadline = existing.output as number;
@@ -198,6 +251,12 @@ export class RunContext implements Context {
   async waitForEvent<T = unknown>(name: string, opts?: { timeout?: Duration }): Promise<T> {
     const key = stepKey(name, this.#ordinals.next(name));
     const existing = this.#d.journal.get(key);
+    this.#consumed.add(key);
+    if (existing && existing.kind !== "event" && existing.kind !== "timeout") {
+      this.#violation(
+        `journaled step "${key}" has kind "${existing.kind}" but was replayed as a waitForEvent - the step sequence diverged from the journal`,
+      );
+    }
     if (existing?.status === "completed") {
       if (existing.kind === "timeout") throw new TimeoutError(name);
       return existing.output as T; // REPLAY: journaled payload, never re-consume
@@ -244,5 +303,15 @@ export class RunContext implements Context {
     const payload = await this.waitForEvent<unknown>(name, opts);
     if (typeof payload === "boolean") return payload;
     return Boolean((payload as { approved?: unknown } | null)?.approved);
+  }
+
+  /** Wall-clock read as a journaled micro-step (§3): stable across replays. */
+  now(): Promise<number> {
+    return this.step("$now", async () => this.#d.clock.now());
+  }
+
+  /** Randomness as a journaled micro-step (§3): drawn once, replayed verbatim. */
+  random(): Promise<number> {
+    return this.step("$random", async () => Math.random());
   }
 }
