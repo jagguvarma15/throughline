@@ -1,0 +1,18 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/core/src/index.ts",
+    "packages/store-sqlite/src/index.ts",
+    "packages/store-postgres/src/index.ts",
+    "packages/adapters-llm/src/index.ts",
+    "packages/adapters-ai-sdk/src/index.ts",
+    "packages/testing/src/index.ts",
+    "packages/cli/src/index.ts",
+    "packages/mcp/src/index.ts"
+  ],
+  "tsconfig": "tsconfig.typedoc.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "docs/api",
+  "excludeExternals": true,
+  "readme": "none"
+}
