@@ -7,7 +7,15 @@ import {
   serializeError,
 } from "../errors";
 import { loadTracing } from "../otel";
-import type { Fence, Logger, RetryPolicy, Store, TaskHandler, WorkflowRow } from "../types";
+import type {
+  DeterminismMode,
+  Fence,
+  Logger,
+  RetryPolicy,
+  Store,
+  TaskHandler,
+  WorkflowRow,
+} from "../types";
 import { RunContext } from "./context";
 
 export interface RunOutcome {
@@ -28,6 +36,7 @@ export interface RunDeps {
   sleep: (ms: number) => Promise<void>;
   budgetLimit?: number;
   checkCancel?: () => Promise<boolean>;
+  determinism?: DeterminismMode;
 }
 
 /**
@@ -52,12 +61,16 @@ export async function runWorkflow(deps: RunDeps): Promise<RunOutcome> {
     sleep: deps.sleep,
     budgetLimit: deps.budgetLimit,
     checkCancel: deps.checkCancel,
+    determinism: deps.determinism,
     tracing,
   });
 
   const exec = async (): Promise<RunOutcome> => {
     try {
       const output = await deps.handler(ctx, deps.workflow.input);
+      // Determinism guard (§4): journaled steps this replay never consumed mean the
+      // handler diverged. In strict mode this throws -> the run lands `dead` below.
+      ctx.verifyJournalConsumed();
       return { status: "completed", output };
     } catch (e) {
       if (e instanceof SuspendSignal) {
