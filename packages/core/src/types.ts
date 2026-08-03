@@ -134,6 +134,29 @@ export interface StoreStats {
   stepCount: number;
   failedStepCount: number;
   tokenSum: number;
+  /** Highest recovery_attempts across live runs - a crash-looping run shows up here before it dies. */
+  maxRecoveryAttempts: number;
+}
+
+/** Statuses a run can never leave; only these are eligible for pruning. */
+export const TERMINAL_STATUSES: ReadonlySet<WorkflowStatus> = new Set([
+  "completed",
+  "failed",
+  "dead",
+  "cancelled",
+]);
+
+/** What pruneRuns deletes when no statuses are given. */
+export const DEFAULT_PRUNE_STATUSES: WorkflowStatus[] = ["completed", "dead", "cancelled"];
+
+export interface PruneOptions {
+  /** Delete terminal runs whose updated_at is older than now - olderThanMs. */
+  olderThanMs: number;
+  /** Terminal statuses to prune. Default: completed, dead, cancelled. Non-terminal throws. */
+  statuses?: WorkflowStatus[];
+  /** Max runs deleted per call (bounds transaction size). Default 1000. */
+  limit?: number;
+  now: number;
 }
 
 export interface ListWorkflowsOptions {
@@ -186,6 +209,18 @@ export interface Store {
   listWorkflows(opts?: ListWorkflowsOptions): Promise<WorkflowRow[]>;
   /** Aggregate counts for metrics. */
   stats(): Promise<StoreStats>;
+  /**
+   * Delete terminal runs (and their steps/events) older than the TTL, bounded by
+   * opts.limit per call. Returns the number of runs deleted. The journal is the
+   * source of truth while a run is live; after the retention window it is garbage.
+   */
+  pruneRuns(opts: PruneOptions): Promise<number>;
+  /**
+   * Redrive support: zero the attempt count on this run's `failed` journal rows so an
+   * exhausted step gets a fresh retry budget on the next execution. Completed rows are
+   * untouched (they replay). Returns the number of rows reset.
+   */
+  resetFailedSteps(workflowId: string): Promise<number>;
   /**
    * @deprecated Not used by the engine (the worker releases leases via an updateWorkflow
    * patch). Retained for test harnesses; may be removed in a future minor.
