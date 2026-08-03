@@ -3,7 +3,7 @@
 // which lives in their code (see examples/*/src/run.ts for the worker shape).
 
 import { parseArgs } from "node:util";
-import { type Ops, type WorkflowStatus, createOps } from "@through-line/core";
+import { type Ops, type Store, type WorkflowStatus, createOps } from "@through-line/core";
 import { postgres } from "@through-line/store-postgres";
 import { sqlite } from "@through-line/store-sqlite";
 import { createHttpOps } from "./http";
@@ -19,6 +19,9 @@ commands:
   signal <id> <event>     deliver an event to a run (--payload <json>)
   approve <id> <event>    approve a waitForApproval gate (--deny to reject)
   cancel <id>             cancel a run
+  retry <id>              redrive a dead run (journal preserved; completed steps replay)
+  prune                   delete terminal runs (--older-than <duration>, --limit <n>)
+  migrate                 apply store schema migrations (direct store access only)
   stats                   store-wide counts
 
 backend (first match wins):
@@ -33,6 +36,8 @@ export interface CliIo {
 
 export interface Backend {
   ops: Ops;
+  /** Present in direct-store modes; absent over HTTP (migrate needs it). */
+  store?: Store;
   close(): void | Promise<void>;
 }
 
@@ -49,10 +54,10 @@ export function resolveBackend(
   }
   if (env.DATABASE_URL) {
     const store = postgres(env.DATABASE_URL);
-    return { ops: createOps(store), close: () => store.close() };
+    return { ops: createOps(store), store, close: () => store.close() };
   }
   const store = sqlite(flags.db ?? env.THROUGHLINE_DB ?? "throughline.db");
-  return { ops: createOps(store), close: () => store.close() };
+  return { ops: createOps(store), store, close: () => store.close() };
 }
 
 function parseJson(
@@ -93,6 +98,7 @@ export async function runCli(
         limit: { type: "string" },
         payload: { type: "string" },
         deny: { type: "boolean" },
+        "older-than": { type: "string" },
         help: { type: "boolean" },
       },
     });
@@ -205,6 +211,41 @@ export async function runCli(
           return 1;
         }
         print({ result: await ops.cancel(id) });
+        return 0;
+      }
+      case "retry": {
+        const id = args[0];
+        if (!id) {
+          io.err("error: retry requires a run id");
+          return 1;
+        }
+        const result = await ops.retry(id);
+        if (result === "not-dead") {
+          io.err(`error: run ${id} is not dead; only dead runs can be retried`);
+          return 1;
+        }
+        print({ result });
+        return 0;
+      }
+      case "prune": {
+        const olderThan = flags["older-than"] as string | undefined;
+        if (!olderThan) {
+          io.err("error: prune requires --older-than (e.g. --older-than 7d)");
+          return 1;
+        }
+        const n = Number(flags.limit);
+        print(await ops.prune({ olderThan, limit: Number.isFinite(n) ? n : undefined }));
+        return 0;
+      }
+      case "migrate": {
+        if (!backend.store) {
+          io.err(
+            "error: migrate needs direct store access (a --db path or DATABASE_URL, not --url)",
+          );
+          return 1;
+        }
+        await backend.store.init();
+        print({ ok: true });
         return 0;
       }
       case "stats": {
