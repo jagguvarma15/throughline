@@ -31,6 +31,10 @@ services:
     environment:
       PORT: 3001
       DATABASE_URL: postgres://throughline:throughline@postgres:5432/throughline
+      # Local reference stack only. For anything reachable, set THROUGHLINE_API_TOKEN
+      # (and VITE_CP_TOKEN in the dashboard build) instead of allowing anonymous access.
+      THROUGHLINE_ALLOW_ANON: "1"
+      CORS_ORIGIN: http://localhost:3000
     depends_on:
       postgres:
         condition: service_healthy
