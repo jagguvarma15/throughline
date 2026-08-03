@@ -10,6 +10,7 @@ export interface Run {
   waitEvent: string | null;
   output: unknown;
   error: { message: string } | null;
+  recoveryAttempts: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -53,4 +54,8 @@ export async function signalRun(id: string, name: string, payload: unknown): Pro
 
 export async function cancelRun(id: string): Promise<void> {
   await json(await fetch(`${BASE}/runs/${id}/cancel`, { method: "POST", headers: AUTH_HEADERS }));
+}
+
+export async function retryRun(id: string): Promise<void> {
+  await json(await fetch(`${BASE}/runs/${id}/retry`, { method: "POST", headers: AUTH_HEADERS }));
 }
