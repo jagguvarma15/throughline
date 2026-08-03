@@ -2,6 +2,7 @@
 // the CLI's --url mode so operators can point at a remote deployment instead of a DB.
 
 import {
+  type Duration,
   type ListWorkflowsOptions,
   type Ops,
   type RunDetail,
@@ -24,7 +25,7 @@ async function request<T>(
   } catch {
     body = undefined;
   }
-  if (!res.ok && res.status !== 404) {
+  if (!res.ok && res.status !== 404 && res.status !== 409) {
     const detail = (body as { error?: string } | undefined)?.error ?? res.statusText;
     throw new Error(`control-plane request failed: ${res.status} ${detail}`);
   }
@@ -76,6 +77,18 @@ export function createHttpOps(baseUrl: string, token?: string): Ops {
     async cancel(id: string): Promise<"cancelled" | "requested" | "noop"> {
       const r = await post(`/runs/${encodeURIComponent(id)}/cancel`);
       return (r.body as { result: "cancelled" | "requested" | "noop" }).result;
+    },
+
+    async retry(id: string): Promise<"retried" | "not-dead"> {
+      const r = await post(`/runs/${encodeURIComponent(id)}/retry`);
+      if (r.status === 404) throw new WorkflowNotFoundError(id);
+      if (r.status === 409) return "not-dead";
+      return (r.body as { result: "retried" }).result;
+    },
+
+    async prune(opts: { olderThan: Duration; limit?: number }): Promise<{ pruned: number }> {
+      const r = await post("/admin/prune", opts);
+      return r.body as { pruned: number };
     },
 
     async stats(): Promise<StoreStats> {
