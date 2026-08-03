@@ -372,5 +372,34 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       expect(s.failedStepCount).toBe(1);
       expect(s.tokenSum).toBe(7);
     });
+
+    it("stats tokenSum survives sums past the 32-bit integer range", async () => {
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      const c = await store.claim("w1", 10_000, 1);
+      if (!c) throw new Error("expected a claim");
+      const fence = { workerId: "w1", leaseEpoch: c.leaseEpoch };
+      await store.appendStep({
+        workflowId: wf.id,
+        stepKey: "a#0",
+        status: "completed",
+        output: 1,
+        attempts: 1,
+        cost: 2_000_000_000,
+        now: 2,
+        fence,
+      });
+      await store.appendStep({
+        workflowId: wf.id,
+        stepKey: "b#0",
+        status: "completed",
+        output: 1,
+        attempts: 1,
+        cost: 2_000_000_000,
+        now: 3,
+        fence,
+      });
+      const s = await store.stats();
+      expect(s.tokenSum).toBe(4_000_000_000);
+    });
   });
 }
