@@ -1,4 +1,10 @@
-import { type Context, LeaseLostError, TimeoutError, throughline } from "@through-line/core";
+import {
+  type Context,
+  LeaseLostError,
+  TimeoutError,
+  createOps,
+  throughline,
+} from "@through-line/core";
 import { describe, expect, it } from "vitest";
 import { controlledClock } from "./clock";
 import { type FaultPlan, faultStore } from "./faultStore";
@@ -640,6 +646,71 @@ export function defineEngineSuite(makeStore: StoreFactory): void {
       expect(run?.status).toBe("dead");
       expect(executions).toBe(3); // total executions across processes == maxAttempts
       expect(run?.steps[0]?.attempts).toBe(3);
+      await store.close();
+    });
+
+    it("retention: the worker sweeps terminal runs past the TTL", async () => {
+      // The store stamps updated_at with its own (wall) clock, so the sweep clock must
+      // start at wall time for the TTL cutoff to land on the right side of it.
+      const clock = controlledClock(Date.now());
+      const store = await makeStore();
+      const tf = throughline({ store, clock, sleep: noSleep });
+      tf.task("t", async (ctx) => ctx.step("a", async () => 1));
+      const id = await tf.start("t", null);
+      const worker = tf.worker({
+        leaseMs: 1000,
+        workerId: "w",
+        retention: { terminalTtl: "1h", sweepIntervalMs: 0 },
+      });
+      await worker.runOnce();
+      expect((await tf.getRun(id))?.status).toBe("completed");
+
+      clock.advance(2 * 3_600_000); // past the TTL; next runOnce sweeps before claiming
+      await worker.runOnce();
+      expect(await tf.getRun(id)).toBeNull();
+      await store.close();
+    });
+
+    it("retry redrives a dead run with its journal preserved", async () => {
+      const clock = controlledClock(1000);
+      const store = await makeStore();
+      const tf = throughline({ store, clock, sleep: noSleep });
+      const calls = { a: 0, b: 0 };
+      let broken = true;
+      tf.task("t", async (ctx) => {
+        const a = await ctx.step("a", async () => {
+          calls.a++;
+          return 1;
+        });
+        const b = await ctx.step(
+          "b",
+          async () => {
+            calls.b++;
+            if (broken) throw new Error("downstream outage");
+            return a + 10;
+          },
+          { retry: { maxAttempts: 1, backoff: "fixed", baseMs: 1, jitter: false } },
+        );
+        return { a, b };
+      });
+      const id = await tf.start("t", null);
+      const worker = tf.worker({ leaseMs: 1000, workerId: "w" });
+      await worker.runOnce();
+      expect((await tf.getRun(id))?.status).toBe("dead");
+
+      const ops = createOps(store, clock);
+      expect(await ops.retry(id)).toBe("retried");
+      expect((await tf.getRun(id))?.status).toBe("pending");
+      // A run that is not dead cannot be redriven.
+      expect(await ops.retry(id)).toBe("not-dead");
+
+      broken = false;
+      await worker.runOnce();
+      const run = await tf.getRun(id);
+      expect(run?.status).toBe("completed");
+      expect(run?.output).toEqual({ a: 1, b: 11 });
+      expect(calls.a).toBe(1); // step "a" replayed from the journal, never re-run
+      expect(calls.b).toBe(2); // failed once, succeeded once after the retry
       await store.close();
     });
 
