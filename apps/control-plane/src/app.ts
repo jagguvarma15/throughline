@@ -1,8 +1,14 @@
-import type { Store, WorkflowStatus } from "@through-line/core";
+import {
+  type Store,
+  WorkflowNotFoundError,
+  type WorkflowStatus,
+  createOps,
+} from "@through-line/core";
 import cors from "cors";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";
 import { renderMetrics } from "./metrics";
+import { type AuthConfig, requireAuth, resolveAuthConfig } from "./middleware/auth";
 import { errorHandler } from "./middleware/errorHandler";
 import { rateLimiter } from "./middleware/rateLimiter";
 
@@ -15,11 +21,49 @@ const wrap =
     fn(req, res).catch(next);
   };
 
+export interface AppOptions {
+  /** Resolved from THROUGHLINE_API_TOKEN / THROUGHLINE_ALLOW_ANON when omitted. */
+  auth?: AuthConfig;
+  /** Allowed browser origins. Default: CORS_ORIGIN (comma-separated), else none. */
+  corsOrigins?: string[] | false;
+  /** Proxy hops to trust so req.ip (rate limiting) is real behind nginx (TRUST_PROXY). */
+  trustProxy?: number;
+  /** Leave GET /metrics unauthenticated for a scraper (METRICS_PUBLIC=1). */
+  metricsPublic?: boolean;
+}
+
+const STATUSES: ReadonlySet<string> = new Set([
+  "pending",
+  "running",
+  "waiting",
+  "completed",
+  "failed",
+  "dead",
+  "cancelled",
+]);
+
+const MAX_LIST_LIMIT = 500;
+
+function parseCorsOrigins(env: string | undefined): string[] | false {
+  const origins =
+    env
+      ?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+  return origins.length > 0 ? origins : false;
+}
+
 /** A thin read/op HTTP API over a durable store. Durability lives in the worker, not here. */
-export function createApp(store: Store): Express {
+export function createApp(store: Store, opts: AppOptions = {}): Express {
+  const auth = opts.auth ?? resolveAuthConfig();
+  const guard = requireAuth(auth);
+  const metricsPublic = opts.metricsPublic ?? process.env.METRICS_PUBLIC === "1";
+  const ops = createOps(store);
+
   const app = express();
+  app.set("trust proxy", opts.trustProxy ?? Number(process.env.TRUST_PROXY ?? 0));
   app.use(helmet());
-  app.use(cors());
+  app.use(cors({ origin: opts.corsOrigins ?? parseCorsOrigins(process.env.CORS_ORIGIN) }));
   app.use(express.json());
   app.use(rateLimiter);
 
@@ -27,7 +71,7 @@ export function createApp(store: Store): Express {
     "/health",
     wrap(async (_req, res) => {
       try {
-        await store.stats();
+        await ops.stats();
         res.json({ status: "healthy", timestamp: new Date().toISOString() });
       } catch (e) {
         res
@@ -39,56 +83,114 @@ export function createApp(store: Store): Express {
 
   app.get(
     "/metrics",
+    ...(metricsPublic ? [] : [guard]),
     wrap(async (_req, res) => {
       res.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-      res.send(renderMetrics(await store.stats()));
+      res.send(renderMetrics(await ops.stats()));
+    }),
+  );
+
+  app.get(
+    "/stats",
+    guard,
+    wrap(async (_req, res) => {
+      res.json(await ops.stats());
     }),
   );
 
   app.get(
     "/runs",
+    guard,
     wrap(async (req, res) => {
-      const status =
-        typeof req.query.status === "string" ? (req.query.status as WorkflowStatus) : undefined;
-      const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : undefined;
-      res.json({ runs: await store.listWorkflows({ status, limit }) });
+      const rawStatus = req.query.status;
+      if (rawStatus !== undefined && (typeof rawStatus !== "string" || !STATUSES.has(rawStatus))) {
+        res.status(400).json({ error: "invalid status" });
+        return;
+      }
+      const status = rawStatus as WorkflowStatus | undefined;
+      // Number("abc") is NaN, which is not nullish - clamp instead of passing it to SQL.
+      const n = Number(req.query.limit);
+      const limit = Number.isFinite(n)
+        ? Math.min(Math.max(1, Math.trunc(n)), MAX_LIST_LIMIT)
+        : undefined;
+      res.json({ runs: await ops.listRuns({ status, limit }) });
     }),
   );
 
   app.get(
     "/runs/:id",
+    guard,
     wrap(async (req, res) => {
-      const wf = await store.getWorkflow(req.params.id ?? "");
-      if (!wf) {
+      const detail = await ops.getRun(req.params.id ?? "");
+      if (!detail) {
         res.status(404).json({ error: "run not found" });
         return;
       }
-      res.json({ run: wf, steps: await store.loadJournal(wf.id) });
+      res.json(detail);
+    }),
+  );
+
+  app.post(
+    "/runs",
+    guard,
+    wrap(async (req, res) => {
+      const body = (req.body ?? {}) as {
+        name?: unknown;
+        input?: unknown;
+        id?: unknown;
+        idempotencyKey?: unknown;
+      };
+      if (typeof body.name !== "string" || body.name.length === 0) {
+        res.status(400).json({ error: "name (non-empty string) is required" });
+        return;
+      }
+      if (body.id !== undefined && typeof body.id !== "string") {
+        res.status(400).json({ error: "id must be a string" });
+        return;
+      }
+      if (body.idempotencyKey !== undefined && typeof body.idempotencyKey !== "string") {
+        res.status(400).json({ error: "idempotencyKey must be a string" });
+        return;
+      }
+      // No registry here: a task no worker registers is claimed and marked dead with
+      // "no task registered" - visible in the dashboard, re-runnable after deploying it.
+      const { id } = await ops.startRun({
+        name: body.name,
+        input: body.input,
+        id: body.id,
+        idempotencyKey: body.idempotencyKey,
+      });
+      res.status(201).json({ id });
     }),
   );
 
   app.post(
     "/runs/:id/signal",
+    guard,
     wrap(async (req, res) => {
       const body = (req.body ?? {}) as { name?: unknown; payload?: unknown };
       if (typeof body.name !== "string") {
         res.status(400).json({ error: "name (string) is required" });
         return;
       }
-      const wf = await store.getWorkflow(req.params.id ?? "");
-      if (!wf) {
-        res.status(404).json({ error: "run not found" });
-        return;
+      try {
+        await ops.signal(req.params.id ?? "", body.name, body.payload);
+      } catch (e) {
+        if (e instanceof WorkflowNotFoundError) {
+          res.status(404).json({ error: "run not found" });
+          return;
+        }
+        throw e;
       }
-      await store.addEvent(wf.id, body.name, body.payload, Date.now());
       res.status(202).json({ ok: true });
     }),
   );
 
   app.post(
     "/runs/:id/cancel",
+    guard,
     wrap(async (req, res) => {
-      res.json({ result: await store.requestCancel(req.params.id ?? "", Date.now()) });
+      res.json({ result: await ops.cancel(req.params.id ?? "") });
     }),
   );
 
