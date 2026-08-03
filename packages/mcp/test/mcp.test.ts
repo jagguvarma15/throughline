@@ -94,7 +94,7 @@ describe("mcp server", () => {
   });
 
   it("cancels runs and times out waits without leaving the loop stuck", async () => {
-    const { store, callJson } = await setup();
+    const { store, call, callJson } = await setup();
     const { id } = await callJson("start_run", { task: "appr" });
 
     // No worker is running: wait_for_run times out on the pending run.
@@ -104,6 +104,10 @@ describe("mcp server", () => {
     expect(await callJson("cancel_run", { id })).toEqual({ result: "cancelled" });
     const after = await callJson("wait_for_run", { id, timeout_ms: 30 });
     expect(after.status).toBe("cancelled");
+
+    // retry_run only redrives dead runs.
+    expect((await call("retry_run", { id })).isError).toBe(true);
+    expect((await call("retry_run", { id: "nope" })).isError).toBe(true);
 
     await store.close();
   });
