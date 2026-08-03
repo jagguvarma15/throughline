@@ -1,8 +1,10 @@
 import { type Clock, systemClock } from "../clock";
+import { parseDuration } from "../duration";
 import { CancelledError, LeaseLostError, RecoveryExhaustedError, serializeError } from "../errors";
 import { silentLogger } from "../logger";
 import type {
   DeterminismMode,
+  Duration,
   Fence,
   Logger,
   RetryPolicy,
@@ -11,6 +13,16 @@ import type {
   WorkflowPatch,
 } from "../types";
 import { runWorkflow } from "./run";
+
+/** Terminal-run garbage collection swept opportunistically by the worker. */
+export interface RetentionOptions {
+  /** Delete completed/dead/cancelled runs older than this. */
+  terminalTtl: Duration;
+  /** How often to sweep. Default 60s. */
+  sweepIntervalMs?: number;
+  /** Max runs deleted per sweep. Default 1000. */
+  limit?: number;
+}
 
 const realSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -32,6 +44,8 @@ export interface WorkerDeps {
   maxRecoveryAttempts?: number;
   /** Determinism-guard mode (guarantees §4). Default: strict outside production. */
   determinism?: DeterminismMode;
+  /** Opportunistic terminal-run GC; off unless configured. */
+  retention?: RetentionOptions;
 }
 
 let workerSeq = 0;
@@ -50,6 +64,8 @@ export class Worker {
   #concurrency: number;
   #maxRecoveryAttempts: number;
   #determinism?: DeterminismMode;
+  #retention?: RetentionOptions;
+  #lastSweepAt = Number.NEGATIVE_INFINITY;
   #running = false;
   #loops: Promise<void>[] = [];
   #initialized = false;
@@ -67,6 +83,26 @@ export class Worker {
     this.#concurrency = d.concurrency ?? 1;
     this.#maxRecoveryAttempts = d.maxRecoveryAttempts ?? 10;
     this.#determinism = d.determinism;
+    this.#retention = d.retention;
+  }
+
+  /** Opportunistic GC (off unless retention is configured): prune terminal runs on an interval. */
+  async #sweepIfDue(): Promise<void> {
+    const retention = this.#retention;
+    if (!retention) return;
+    const now = this.#clock.now();
+    if (now - this.#lastSweepAt < (retention.sweepIntervalMs ?? 60_000)) return;
+    this.#lastSweepAt = now;
+    try {
+      const pruned = await this.#store.pruneRuns({
+        olderThanMs: parseDuration(retention.terminalTtl),
+        limit: retention.limit,
+        now,
+      });
+      if (pruned > 0) this.#logger.info("pruned terminal runs", { pruned });
+    } catch (e) {
+      this.#logger.warn("terminal-run prune failed", e);
+    }
   }
 
   get id(): string {
@@ -79,6 +115,7 @@ export class Worker {
       await this.#store.init();
       this.#initialized = true;
     }
+    await this.#sweepIfDue();
     const wf = await this.#store.claim(this.#workerId, this.#leaseMs, this.#clock.now());
     if (!wf) return false;
     const fence: Fence = { workerId: this.#workerId, leaseEpoch: wf.leaseEpoch };
