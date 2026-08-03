@@ -2,7 +2,15 @@ import { type Clock, systemClock } from "./clock";
 import { Worker } from "./engine/worker";
 import { silentLogger } from "./logger";
 import { DEFAULT_RETRY, resolveRetry } from "./retry";
-import type { Logger, RetryPolicy, RunState, Store, TaskHandler, TaskRegistration } from "./types";
+import type {
+  DeterminismMode,
+  Logger,
+  RetryPolicy,
+  RunState,
+  Store,
+  TaskHandler,
+  TaskRegistration,
+} from "./types";
 
 export interface ThroughlineOptions {
   store: Store;
@@ -11,6 +19,12 @@ export interface ThroughlineOptions {
   logger?: Logger;
   /** Backoff sleeper between step retries; injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Determinism-guard mode (guarantees §4): `strict` throws NonDeterminismError when a
+   * replay diverges from the journal, `warn` logs, `off` disables. Default: strict
+   * unless NODE_ENV is "production", then warn.
+   */
+  determinism?: DeterminismMode;
 }
 
 export interface StartOptions {
@@ -23,6 +37,11 @@ export interface WorkerOptions {
   pollIntervalMs?: number;
   leaseMs?: number;
   workerId?: string;
+  /**
+   * Poison-pill guard (guarantees §5): a run re-claimed after crashing more than this
+   * many times is marked `dead` instead of being retried forever. Default 10.
+   */
+  maxRecoveryAttempts?: number;
 }
 
 export interface TaskRef<I, O> {
@@ -120,6 +139,8 @@ export function throughline(options: ThroughlineOptions): Throughline {
         pollIntervalMs: opts?.pollIntervalMs,
         leaseMs: opts?.leaseMs,
         workerId: opts?.workerId,
+        maxRecoveryAttempts: opts?.maxRecoveryAttempts,
+        determinism: options.determinism,
       });
     },
   };
