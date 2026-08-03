@@ -38,7 +38,7 @@ export function RunsList({
   return (
     <div>
       <h2 className="mb-4 text-base font-semibold">
-        {status === "waiting" ? "Pending approvals" : "Runs"}
+        {status === "waiting" ? "Pending approvals" : status === "dead" ? "Dead letter" : "Runs"}
       </h2>
       {runs.length === 0 ? (
         <p className="text-sm text-slate-500">No runs.</p>
@@ -49,6 +49,7 @@ export function RunsList({
               <th className="py-2 font-medium">Run</th>
               <th className="font-medium">Task</th>
               <th className="font-medium">Status</th>
+              <th className="font-medium">Recoveries</th>
             </tr>
           </thead>
           <tbody>
@@ -66,6 +67,15 @@ export function RunsList({
                 <td>{run.name}</td>
                 <td>
                   <StatusBadge status={run.status} />
+                </td>
+                <td>
+                  {run.recoveryAttempts > 0 && (
+                    <span
+                      className={`text-xs ${run.recoveryAttempts > 3 ? "font-semibold text-amber-600" : "text-slate-500"}`}
+                    >
+                      {run.recoveryAttempts}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

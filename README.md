@@ -91,13 +91,45 @@ crash-resumes with exactly-once tool effects.
 | `@through-line/adapters-llm` | BYO-LLM helper: wrap a model call in a durable step. |
 | `@through-line/adapters-ai-sdk` | Vercel AI SDK adapter: durable `generateText` model calls + exactly-once tools. |
 | `@through-line/testing` | Fault-injection store, store/engine conformance, property + golden-trace harness. |
-| `apps/control-plane` | Thin read/op HTTP API over the store (`/runs`, signal, cancel, `/health`, `/metrics`). |
+| `@through-line/cli` | Operator CLI: `throughline start / list / status / signal / approve / cancel / stats`. |
+| `@through-line/mcp` | MCP server so AI agents can start, inspect, approve, and cancel durable runs. |
+| `apps/control-plane` | Auth-gated read/op HTTP API over the store (start, signal, cancel, `/metrics`). |
 | `apps/dashboard` | Durable-run UI (runs, timeline, approvals, replay). |
+
+## Operate runs from the terminal or an AI agent
+
+```bash
+# CLI: JSON in, JSON out - works directly on the store or against a control-plane URL.
+npx @through-line/cli list --status waiting
+npx @through-line/cli approve <run-id> publish
+npx @through-line/cli retry <run-id>                 # redrive a dead run, journal preserved
+npx @through-line/cli prune --older-than 7d          # terminal-run GC
+npx @through-line/cli migrate                        # apply store schema migrations
+
+# MCP: let Claude (or any MCP host) start, watch, and approve durable runs.
+claude mcp add throughline --env THROUGHLINE_DB=./throughline.db -- npx @through-line/mcp
+```
+
+The MCP server exposes `start_run`, `wait_for_run`, `get_run`, `approve_run`,
+`signal_run`, `cancel_run`, `retry_run`, and `get_stats` - see [docs/mcp.md](docs/mcp.md).
+Runs can also be started over HTTP (`POST /runs` on the control-plane, bearer-token
+auth). Workers take a `retention` option for opportunistic terminal-run GC, and dead
+runs surface in the dashboard's Dead letter view with one-click redrive.
+
+## Recipes
+
+[Wrap your existing loop](docs/recipes/wrap-your-loop.md),
+[human approval](docs/recipes/human-approval.md),
+[record/replay testing](docs/recipes/record-replay-testing.md),
+[budgets](docs/recipes/budgets.md). AI-friendly indexes: [llms.txt](llms.txt) and
+[AGENTS.md](AGENTS.md); `pnpm docs:api` generates the API reference.
 
 ## Reference stack
 
 `docker compose up` brings up Postgres, the control-plane, and the dashboard; the
 `monitoring/` stack (Prometheus/Grafana/Loki) scrapes the control-plane's real `/metrics`.
+The control-plane requires `THROUGHLINE_API_TOKEN` (or an explicit
+`THROUGHLINE_ALLOW_ANON=1` for trusted local networks, as the compose file sets).
 
 ## Development
 

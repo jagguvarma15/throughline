@@ -2,15 +2,18 @@ import {
   type AppendStepInput,
   type Clock,
   type ConsumeEventInput,
+  DEFAULT_PRUNE_STATUSES,
   type EventRow,
   type Fence,
   LeaseLostError,
   type ListWorkflowsOptions,
   type NewWorkflow,
+  type PruneOptions,
   type SerializedError,
   type StepRow,
   type Store,
   type StoreStats,
+  TERMINAL_STATUSES,
   WorkflowNotFoundError,
   type WorkflowPatch,
   type WorkflowRow,
@@ -19,7 +22,7 @@ import {
   uuid,
 } from "@through-line/core";
 import Database from "better-sqlite3";
-import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema";
+import { MIGRATIONS, SCHEMA_VERSION } from "./schema";
 
 type Db = Database.Database;
 type Stmt = Database.Statement;
@@ -172,13 +175,26 @@ export class SqliteStore implements Store {
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
     this.db.pragma("busy_timeout = 5000");
-    this.db.exec(SCHEMA_SQL);
-    const row = this.#s("SELECT version FROM schema_version LIMIT 1").get() as
-      | { version: number }
-      | undefined;
-    if (!row) {
-      this.#s("INSERT INTO schema_version (version) VALUES (?)").run(SCHEMA_VERSION);
-    }
+    // Bootstrap the version table so the ladder can read where this database stands.
+    this.db.exec("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
+    const tx = this.db.transaction((): void => {
+      const row = this.db.prepare("SELECT version FROM schema_version LIMIT 1").get() as
+        | { version: number }
+        | undefined;
+      const current = row?.version ?? 0;
+      if (current > SCHEMA_VERSION) {
+        throw new Error(
+          `database schema is v${current} but this store only knows v${SCHEMA_VERSION}: upgrade @through-line/store-sqlite, or point it at an older database`,
+        );
+      }
+      for (const m of MIGRATIONS) {
+        if (m.version > current) this.db.exec(m.sql);
+      }
+      if (current === SCHEMA_VERSION) return;
+      if (row) this.db.prepare("UPDATE schema_version SET version=?").run(SCHEMA_VERSION);
+      else this.db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(SCHEMA_VERSION);
+    });
+    tx.immediate();
   }
 
   async createWorkflow(rec: NewWorkflow): Promise<WorkflowRow> {
@@ -208,20 +224,30 @@ export class SqliteStore implements Store {
 
   async claim(workerId: string, leaseMs: number, now: number): Promise<WorkflowRow | null> {
     const tx = this.db.transaction((): RawWf | null => {
-      const candidate = this.#s(
-        `SELECT * FROM workflows WHERE
-            status='pending'
-            OR (status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at < @now)
-            OR (status='waiting' AND wake_at IS NOT NULL AND wake_at <= @now)
-            OR (status='waiting' AND wait_event IS NOT NULL AND EXISTS (
-                  SELECT 1 FROM events e
-                  WHERE e.workflow_id = workflows.id
-                    AND e.name = workflows.wait_event
-                    AND e.consumed_at IS NULL))
-         ORDER BY updated_at ASC
-         LIMIT 1`,
-      ).get({ now }) as RawWf | undefined;
-      if (!candidate) return null;
+      // One targeted, index-backed probe per runnable predicate (a single OR query
+      // cannot use any one index and degrades to a scan of every live row per poll).
+      const winner = this.#s(
+        `SELECT id FROM (
+            SELECT * FROM (SELECT id, updated_at FROM workflows
+              WHERE status='pending' ORDER BY updated_at ASC LIMIT 1)
+            UNION ALL
+            SELECT * FROM (SELECT id, updated_at FROM workflows
+              WHERE status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at < @now
+              ORDER BY updated_at ASC LIMIT 1)
+            UNION ALL
+            SELECT * FROM (SELECT id, updated_at FROM workflows
+              WHERE status='waiting' AND wake_at IS NOT NULL AND wake_at <= @now
+              ORDER BY updated_at ASC LIMIT 1)
+            UNION ALL
+            SELECT * FROM (SELECT w.id, w.updated_at FROM workflows w
+              WHERE w.status='waiting' AND w.wait_event IS NOT NULL AND EXISTS (
+                SELECT 1 FROM events e
+                WHERE e.workflow_id = w.id AND e.name = w.wait_event AND e.consumed_at IS NULL)
+              ORDER BY w.updated_at ASC LIMIT 1)
+          ) ORDER BY updated_at ASC LIMIT 1`,
+      ).get({ now }) as { id: string } | undefined;
+      if (!winner) return null;
+      const candidate = this.#s("SELECT * FROM workflows WHERE id=?").get(winner.id) as RawWf;
       const recoveryDelta = candidate.status === "running" ? 1 : 0;
       this.#s(
         `UPDATE workflows
@@ -458,7 +484,46 @@ export class SqliteStore implements Store {
     const tokenSum = (
       this.#s("SELECT COALESCE(SUM(cost), 0) AS s FROM steps").get() as { s: number }
     ).s;
-    return { workflowsByStatus, stepCount, failedStepCount, tokenSum };
+    const maxRecoveryAttempts = (
+      this.#s(
+        `SELECT COALESCE(MAX(recovery_attempts), 0) AS m FROM workflows
+         WHERE status IN ('pending','running','waiting')`,
+      ).get() as { m: number }
+    ).m;
+    return { workflowsByStatus, stepCount, failedStepCount, tokenSum, maxRecoveryAttempts };
+  }
+
+  async resetFailedSteps(workflowId: string): Promise<number> {
+    const res = this.#s("UPDATE steps SET attempts=0 WHERE workflow_id=? AND status='failed'").run(
+      workflowId,
+    );
+    return res.changes;
+  }
+
+  async pruneRuns(opts: PruneOptions): Promise<number> {
+    const statuses = opts.statuses ?? DEFAULT_PRUNE_STATUSES;
+    const nonTerminal = statuses.filter((s) => !TERMINAL_STATUSES.has(s));
+    if (nonTerminal.length > 0) {
+      throw new Error(`pruneRuns only deletes terminal runs; got: ${nonTerminal.join(", ")}`);
+    }
+    const limit = opts.limit ?? 1000;
+    const cutoff = opts.now - opts.olderThanMs;
+    const tx = this.db.transaction((): number => {
+      const marks = statuses.map(() => "?").join(",");
+      const ids = (
+        this.db
+          .prepare(`SELECT id FROM workflows WHERE status IN (${marks}) AND updated_at < ? LIMIT ?`)
+          .all(...statuses, cutoff, limit) as Array<{ id: string }>
+      ).map((r) => r.id);
+      if (ids.length === 0) return 0;
+      const idMarks = ids.map(() => "?").join(",");
+      // Children first: the schema has plain REFERENCES, no ON DELETE CASCADE.
+      this.db.prepare(`DELETE FROM steps WHERE workflow_id IN (${idMarks})`).run(...ids);
+      this.db.prepare(`DELETE FROM events WHERE workflow_id IN (${idMarks})`).run(...ids);
+      this.db.prepare(`DELETE FROM workflows WHERE id IN (${idMarks})`).run(...ids);
+      return ids.length;
+    });
+    return tx.immediate();
   }
 
   async requestCancel(id: string, now: number): Promise<"cancelled" | "requested" | "noop"> {

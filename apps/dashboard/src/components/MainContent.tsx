@@ -16,7 +16,10 @@ export function MainContent({
       {selected ? (
         <RunDetail id={selected} onBack={() => onSelect(null)} />
       ) : (
-        <RunsList status={view === "approvals" ? "waiting" : undefined} onSelect={onSelect} />
+        <RunsList
+          status={view === "approvals" ? "waiting" : view === "dead" ? "dead" : undefined}
+          onSelect={onSelect}
+        />
       )}
     </main>
   );

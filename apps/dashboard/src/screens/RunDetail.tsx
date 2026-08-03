@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type Step, cancelRun, getRun, signalRun } from "../api";
+import { type Step, cancelRun, getRun, retryRun, signalRun } from "../api";
 import { StatusBadge } from "./RunsList";
 
 function preview(value: unknown): string {
@@ -21,6 +21,7 @@ export function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
     onSuccess: invalidate,
   });
   const cancel = useMutation({ mutationFn: () => cancelRun(id), onSuccess: invalidate });
+  const retry = useMutation({ mutationFn: () => retryRun(id), onSuccess: invalidate });
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading…</p>;
   if (error || !data) return <p className="text-sm text-red-600">Could not load this run.</p>;
@@ -42,6 +43,23 @@ export function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
         <StatusBadge status={run.status} />
         <span className="font-mono text-xs text-slate-400">{run.id.slice(0, 8)}</span>
       </div>
+
+      {run.status === "dead" && (
+        <div className="mb-4 rounded border border-red-200 bg-red-50 p-4">
+          <p className="mb-1 text-sm font-medium text-red-900">
+            Run is dead{run.recoveryAttempts > 0 ? ` after ${run.recoveryAttempts} recoveries` : ""}
+          </p>
+          {run.error && <p className="mb-2 font-mono text-xs text-red-800">{run.error.message}</p>}
+          <button
+            type="button"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate()}
+            className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          >
+            Retry (journal preserved)
+          </button>
+        </div>
+      )}
 
       {run.status === "waiting" && (
         <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-4">

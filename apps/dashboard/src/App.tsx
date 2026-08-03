@@ -3,7 +3,7 @@ import { Header } from "./components/Header";
 import { MainContent } from "./components/MainContent";
 import { Sidebar } from "./components/Sidebar";
 
-export type View = "runs" | "approvals";
+export type View = "runs" | "approvals" | "dead";
 
 export function App() {
   const [view, setView] = useState<View>("runs");

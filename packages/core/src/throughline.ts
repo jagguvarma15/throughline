@@ -1,5 +1,5 @@
 import { type Clock, systemClock } from "./clock";
-import { Worker } from "./engine/worker";
+import { type RetentionOptions, Worker } from "./engine/worker";
 import { silentLogger } from "./logger";
 import { DEFAULT_RETRY, resolveRetry } from "./retry";
 import type {
@@ -42,6 +42,8 @@ export interface WorkerOptions {
    * many times is marked `dead` instead of being retried forever. Default 10.
    */
   maxRecoveryAttempts?: number;
+  /** Opportunistic terminal-run GC (completed/dead/cancelled older than a TTL); off unless set. */
+  retention?: RetentionOptions;
 }
 
 export interface TaskRef<I, O> {
@@ -141,6 +143,7 @@ export function throughline(options: ThroughlineOptions): Throughline {
         workerId: opts?.workerId,
         maxRecoveryAttempts: opts?.maxRecoveryAttempts,
         determinism: options.determinism,
+        retention: opts?.retention,
       });
     },
   };

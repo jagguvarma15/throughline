@@ -16,6 +16,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "check:deps": "node scripts/check-forbidden-deps.mjs",
+    "docs:api": "typedoc",
+    "docs:llms": "node scripts/build-llms-full.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm -r build && changeset publish --no-git-tag"
@@ -25,6 +27,8 @@
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.2",
     "tsup": "^8.3.5",
+    "typedoc": "^0.28.0",
+    "typedoc-plugin-markdown": "^4.6.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },

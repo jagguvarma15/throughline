@@ -1,5 +1,5 @@
 import { type Context, NonRetryableError, type RetryPolicy } from "@through-line/core";
-import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
+import { type LanguageModelMiddleware, streamText, wrapLanguageModel } from "ai";
 
 /**
  * Durable Vercel AI SDK adapter. The middleware journals every raw model call
@@ -99,6 +99,95 @@ export function durableToolExecute<In, Out, O extends ToolCallInfo>(
       idempotencyKey: ctx.deriveKey("tool", name, options.toolCallId),
       retry: opts.retry,
     });
+}
+
+export interface DurableStreamTextOptions {
+  /** Step name for the journaled stream; ordinals key repeated calls. Default "stream". */
+  name?: string;
+  /** A-priori token estimate used to gate the budget BEFORE the stream starts. */
+  estimate?: number;
+}
+
+export interface DurableStreamTextOutcome {
+  text: string;
+  totalTokens: number;
+  finishReason: string;
+}
+
+export interface DurableStreamTextResult {
+  /**
+   * Text chunks. Live from the provider on the first execution; on replay, the
+   * journaled text arrives as a single instant chunk with no model call.
+   */
+  textStream: ReadableStream<string>;
+  /** Resolves once the outcome is journaled (or replayed) - the durable result. */
+  result: Promise<DurableStreamTextOutcome>;
+}
+
+/**
+ * EXPERIMENTAL. Durable `streamText`: the first execution streams live to the caller
+ * while accumulating, then journals `{ text, totalTokens, finishReason }` as ONE step
+ * charged to the budget from real usage. A replay re-emits the journaled text instantly
+ * without calling the model. A crash mid-stream leaves the step un-journaled, so
+ * recovery re-runs it from scratch - the same at-least-once window as guarantees §2,
+ * no new promises.
+ *
+ * The step runs with a single attempt (in-process retries would re-emit chunks the
+ * live consumer already saw); recovery happens via crash-resume instead. Tool calls
+ * and multi-step loops are not journaled by this helper - use `durableModel` +
+ * `generateText` for tool loops.
+ */
+export function experimental_durableStreamText(
+  ctx: Context,
+  args: Parameters<typeof streamText>[0],
+  opts: DurableStreamTextOptions = {},
+): DurableStreamTextResult {
+  const name = opts.name ?? "stream";
+  let controller!: ReadableStreamDefaultController<string>;
+  const textStream = new ReadableStream<string>({
+    start(c) {
+      controller = c;
+    },
+  });
+  let live = false;
+
+  const journaled = ctx.step<DurableStreamTextOutcome>(
+    name,
+    async () => {
+      live = true;
+      const r = streamText({ ...args, maxRetries: 0 });
+      let text = "";
+      for await (const delta of r.textStream) {
+        text += delta;
+        controller.enqueue(delta);
+      }
+      const usage = await r.totalUsage;
+      const finishReason = await r.finishReason;
+      return { text, totalTokens: usage.totalTokens ?? 0, finishReason: String(finishReason) };
+    },
+    {
+      retry: { maxAttempts: 1 },
+      budget: { estimate: opts.estimate, cost: (out) => out.totalTokens },
+    },
+  );
+
+  const result = journaled.then(
+    (out) => {
+      // Replay path: nothing streamed live, so emit the journaled text at once.
+      if (!live && out.text.length > 0) controller.enqueue(out.text);
+      controller.close();
+      return out;
+    },
+    (e) => {
+      controller.error(e);
+      throw e;
+    },
+  );
+  // A caller consuming only the (errored) stream never awaits `result`; keep its
+  // rejection observable to awaiters without tripping unhandled-rejection detection.
+  result.catch(() => {});
+
+  return { textStream, result };
 }
 
 /** Spec-v4 usage is nested; fall back to the flat spec-v2/v3 `totalTokens` if present. */

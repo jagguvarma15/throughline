@@ -6,6 +6,7 @@ import {
   LeaseLostError,
   type ListWorkflowsOptions,
   type NewWorkflow,
+  type PruneOptions,
   type StepRow,
   type Store,
   type StoreStats,
@@ -116,6 +117,14 @@ export class FaultStore implements Store {
 
   stats(): Promise<StoreStats> {
     return this.#inner.stats();
+  }
+
+  pruneRuns(opts: PruneOptions): Promise<number> {
+    return this.#inner.pruneRuns(opts);
+  }
+
+  resetFailedSteps(workflowId: string): Promise<number> {
+    return this.#inner.resetFailedSteps(workflowId);
   }
 
   releaseLease(id: string, fence?: Fence): Promise<void> {

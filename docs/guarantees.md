@@ -102,6 +102,12 @@ than `maxRecoveryAttempts` times (worker option, default 10) is marked `dead` wi
 `RecoveryExhaustedError` instead of being retried forever — a run that reliably kills its
 worker can no longer starve the queue.
 
+**Dead-letter redrive.** A `dead` run can be redriven (`ops.retry`, `POST /runs/:id/retry`,
+`throughline retry`, MCP `retry_run`): it returns to `pending` with the error cleared, the
+recovery counter zeroed, and `failed` journal rows given a fresh retry budget
+(`attempts = 0`). Completed journal rows are untouched, so the redrive **replays** finished
+steps and re-runs only what failed. Only `dead` runs can be redriven.
+
 ---
 
 ## 6. Replay algorithm (`ctx.step`)
@@ -179,12 +185,24 @@ an internal `CancelledError` at the next step boundary. `cancelled` is distinct 
 | `NonDeterminismError` | A replay diverged from the journal (§4). Thrown in `strict` mode → `dead`; logged in `warn` mode. |
 | `RecoveryExhaustedError` | A run crashed its worker more than `maxRecoveryAttempts` times and is marked `dead` (§5). |
 
-## 11. Storage & migrations
+## 11. Storage, migrations & retention
 
-`store.init()` is **idempotent**: running it repeatedly is safe and never destroys data.
+`store.init()` is **idempotent** and is also the migration runner: each store carries a
+versioned migration ladder, `init()` applies every version above the one recorded in
+`schema_version` inside a transaction, and it **refuses to run against a database newer
+than the code** (upgrade the library, or point it at an older database). Run it from a
+worker/ops process, or explicitly with `throughline migrate`. Each ladder step is itself
+idempotent (`IF NOT EXISTS`), so a half-applied ladder is safe to re-run.
+
 The same `Store` interface is implemented by `@through-line/store-sqlite` (default, local)
 and `@through-line/store-postgres` (production); the entire core test suite runs unchanged
 against both.
+
+**Retention.** Terminal runs (`completed`/`dead`/`cancelled`) are never deleted by the
+engine; the journal is the source of truth only while a run is live, and afterwards it is
+history. Opt in to garbage collection with the worker `retention` option (opportunistic
+sweeps of terminal runs older than `terminalTtl`), `throughline prune --older-than <ttl>`,
+or `POST /admin/prune`.
 
 ---
 

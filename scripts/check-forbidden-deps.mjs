@@ -26,6 +26,8 @@ const GUARDED = [
   "packages/store-postgres",
   "packages/adapters-llm",
   "packages/adapters-ai-sdk",
+  "packages/cli",
+  "packages/mcp",
 ];
 
 const violations = [];

@@ -22,7 +22,9 @@
       "@through-line/adapters-ai-sdk": ["./packages/adapters-ai-sdk/src/index.ts"],
       "@through-line/store-sqlite": ["./packages/store-sqlite/src/index.ts"],
       "@through-line/store-postgres": ["./packages/store-postgres/src/index.ts"],
-      "@through-line/testing": ["./packages/testing/src/index.ts"]
+      "@through-line/testing": ["./packages/testing/src/index.ts"],
+      "@through-line/cli": ["./packages/cli/src/index.ts"],
+      "@through-line/mcp": ["./packages/mcp/src/index.ts"]
     },
     "skipLibCheck": true,
     "declaration": true,

@@ -1,0 +1,49 @@
+{
+  "name": "@through-line/cli",
+  "version": "0.2.179",
+  "description": "Throughline CLI: start, inspect, signal, approve, and cancel durable runs from the terminal.",
+  "license": "MIT",
+  "keywords": ["durable-execution", "cli", "ai-agents", "workflow", "throughline"],
+  "author": "Jagadesh Varma Nadimpalli",
+  "homepage": "https://github.com/jagguvarma15/throughline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagguvarma15/throughline.git",
+    "directory": "packages/cli"
+  },
+  "bugs": "https://github.com/jagguvarma15/throughline/issues",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "bin": {
+    "throughline": "./dist/bin.js"
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@through-line/core": "workspace:*",
+    "@through-line/store-postgres": "workspace:*",
+    "@through-line/store-sqlite": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
