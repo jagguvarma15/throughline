@@ -373,6 +373,57 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       expect(s.tokenSum).toBe(7);
     });
 
+    it("stats reports the highest recovery count across live runs", async () => {
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      await store.claim("w1", 1000, 100); // lease -> 1100
+      const re = await store.claim("w2", 1000, 5000); // expired -> crash re-claim
+      expect(re?.id).toBe(wf.id);
+      const s = await store.stats();
+      expect(s.maxRecoveryAttempts).toBe(1);
+    });
+
+    it("pruneRuns deletes only old terminal runs, with their steps and events", async () => {
+      // Fences are optional on writes, so terminal fixtures can be built without
+      // claiming (claiming would race with other pending rows in this test).
+      const mk = async (status: string, at: number) => {
+        const wf = await store.createWorkflow({ name: "t", input: 0, now: at });
+        await store.appendStep({
+          workflowId: wf.id,
+          stepKey: "a#0",
+          status: "completed",
+          output: 1,
+          attempts: 1,
+          now: at,
+        });
+        await store.addEvent(wf.id, "e", null, at);
+        await store.updateWorkflow(wf.id, { status: status as never });
+        return wf.id;
+      };
+      // updated_at is bumped by updateWorkflow's clock, so distinguish via prune cutoff
+      // by pruning "now" far in the future for old rows and asserting per-status effects.
+      const oldCompleted = await mk("completed", 1000);
+      const oldDead = await mk("dead", 1000);
+      const keptPending = await store.createWorkflow({ name: "t", input: 0, now: 1000 });
+
+      const farFuture = Date.now() + 10 * 86_400_000;
+      const pruned = await store.pruneRuns({ olderThanMs: 1000, now: farFuture });
+      expect(pruned).toBe(2);
+      expect(await store.getWorkflow(oldCompleted)).toBeNull();
+      expect(await store.getWorkflow(oldDead)).toBeNull();
+      expect(await store.loadJournal(oldCompleted)).toHaveLength(0);
+      expect((await store.getWorkflow(keptPending.id))?.status).toBe("pending");
+
+      // A terminal run inside the TTL survives (its updated_at is the store clock's
+      // real now; a 20-day TTL from farFuture puts the cutoff safely before it).
+      const freshCompleted = await mk("completed", farFuture);
+      expect(await store.pruneRuns({ olderThanMs: 20 * 86_400_000, now: farFuture })).toBe(0);
+      expect((await store.getWorkflow(freshCompleted))?.status).toBe("completed");
+
+      await expect(
+        store.pruneRuns({ olderThanMs: 0, now: farFuture, statuses: ["running"] }),
+      ).rejects.toThrow(/terminal/);
+    });
+
     it("stats tokenSum survives sums past the 32-bit integer range", async () => {
       const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
       const c = await store.claim("w1", 10_000, 1);
