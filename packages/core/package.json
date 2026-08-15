@@ -1,7 +1,7 @@
 {
   "name": "@through-line/core",
   "version": "0.3.172",
-  "description": "Throughline durable-execution core engine: throughline(), task(), ctx, worker, replay.",
+  "description": "Throughline: the durable-execution runtime for AI agents in one package - engine, SQLite and Postgres stores, AI SDK and BYO-LLM adapters, testing suites, CLI, and MCP server.",
   "license": "MIT",
   "keywords": [
     "durable-execution",
@@ -11,7 +11,9 @@
     "replay",
     "exactly-once",
     "human-in-the-loop",
-    "token-budget"
+    "token-budget",
+    "mcp",
+    "cli"
   ],
   "author": "Jagadesh Varma Nadimpalli",
   "homepage": "https://github.com/jagguvarma15/throughline#readme",
@@ -33,24 +35,74 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./sqlite": {
+      "types": "./dist/sqlite.d.ts",
+      "import": "./dist/sqlite.js",
+      "require": "./dist/sqlite.cjs"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js",
+      "require": "./dist/postgres.cjs"
+    },
+    "./ai-sdk": {
+      "types": "./dist/ai-sdk.d.ts",
+      "import": "./dist/ai-sdk.js",
+      "require": "./dist/ai-sdk.cjs"
+    },
+    "./llm": {
+      "types": "./dist/llm.d.ts",
+      "import": "./dist/llm.js",
+      "require": "./dist/llm.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js",
+      "require": "./dist/mcp.cjs"
     }
+  },
+  "bin": {
+    "throughline": "./dist/bin/throughline.js",
+    "throughline-mcp": "./dist/bin/throughline-mcp.js"
   },
   "files": ["dist"],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "biome check src"
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^12.11.1",
+    "pg": "^8.13.1",
+    "zod": "^3.23.8"
+  },
   "devDependencies": {
-    "@opentelemetry/api": "^1.9.0"
+    "@opentelemetry/api": "^1.9.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/pg": "^8.11.10"
   },
   "peerDependencies": {
-    "@opentelemetry/api": "^1.9.0"
+    "@opentelemetry/api": "^1.9.0",
+    "ai": "^7.0.0",
+    "vitest": ">=2"
   },
   "peerDependenciesMeta": {
     "@opentelemetry/api": {
+      "optional": true
+    },
+    "ai": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   },
