@@ -129,6 +129,31 @@ export type WorkflowPatch = Partial<
   >
 >;
 
+export interface AppendStepResult {
+  seq: number;
+  replayed: boolean;
+  /**
+   * The workflow's cancel_requested flag, read in the same transaction as the fence
+   * check. Lets the engine observe a cooperative cancel on every journal commit
+   * without a dedicated query (guarantees §9).
+   */
+  cancelRequested: boolean;
+}
+
+export interface HeartbeatResult {
+  /** The workflow's cancel_requested flag, read by the same fenced write. */
+  cancelRequested: boolean;
+}
+
+/**
+ * Shared mutable cancel flag threaded from the claim, heartbeat results, and
+ * appendStep results into the running context, where the per-step check is a
+ * synchronous in-memory read.
+ */
+export interface CancelState {
+  requested: boolean;
+}
+
 export interface StoreStats {
   workflowsByStatus: Record<string, number>;
   stepCount: number;
@@ -177,24 +202,22 @@ export interface Store {
    * (waiting & an unconsumed event matches wait_event).
    */
   claim(workerId: string, leaseMs: number, now: number): Promise<WorkflowRow | null>;
-  /** Extend the lease. Throws LeaseLostError if the fence is stale. */
-  heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<void>;
+  /**
+   * Extend the lease. Throws LeaseLostError if the fence is stale. Reports the
+   * cancel_requested flag observed by the same write.
+   */
+  heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<HeartbeatResult>;
   /** The journal, ordered by seq. */
   loadJournal(workflowId: string): Promise<StepRow[]>;
   /**
    * UPSERT a terminal step row. A `failed` row may be updated to `completed`; a
    * `completed` row is never overwritten. Allocates seq on first insert.
-   * `replayed: true` means a completed row already existed (no-op).
+   * `replayed: true` means a completed row already existed (no-op). Reports the
+   * cancel_requested flag read in the same transaction as the fence check.
    */
-  appendStep(step: AppendStepInput): Promise<{ seq: number; replayed: boolean }>;
+  appendStep(step: AppendStepInput): Promise<AppendStepResult>;
   updateWorkflow(id: string, patch: WorkflowPatch, fence?: Fence): Promise<void>;
   addEvent(workflowId: string, name: string, payload: unknown, now: number): Promise<void>;
-  /**
-   * Consume one unconsumed event by name (marks consumed_at).
-   * @deprecated Not used by the engine (superseded by consumeEventIntoJournal, which is
-   * atomic with journaling). Retained for store tooling; may be removed in a future minor.
-   */
-  takeEvent(workflowId: string, name: string, now: number): Promise<EventRow | null>;
   /**
    * Atomically consume a matching unconsumed event AND journal its payload as a step,
    * in one transaction (guarantees §7). If a journal entry already exists for stepKey,
@@ -222,10 +245,13 @@ export interface Store {
    */
   resetFailedSteps(workflowId: string): Promise<number>;
   /**
-   * @deprecated Not used by the engine (the worker releases leases via an updateWorkflow
-   * patch). Retained for test harnesses; may be removed in a future minor.
+   * Optional push-wakeup capability. The listener fires when a workflow may have
+   * become claimable (new run, signal, redrive). Delivery is best-effort and
+   * non-durable: polling remains the correctness backstop, so stores without push
+   * support simply omit this method. Resolves once the subscription is established;
+   * the returned function tears it down.
    */
-  releaseLease(id: string, fence?: Fence): Promise<void>;
+  subscribeWake?(listener: () => void): Promise<() => Promise<void>>;
   close(): void | Promise<void>;
 }
 
