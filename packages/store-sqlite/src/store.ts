@@ -1,10 +1,11 @@
 import {
   type AppendStepInput,
+  type AppendStepResult,
   type Clock,
   type ConsumeEventInput,
   DEFAULT_PRUNE_STATUSES,
-  type EventRow,
   type Fence,
+  type HeartbeatResult,
   LeaseLostError,
   type ListWorkflowsOptions,
   type NewWorkflow,
@@ -118,17 +119,6 @@ function mapStep(r: RawStep): StepRow {
     cost: r.cost,
     createdAt: r.created_at,
     completedAt: r.completed_at,
-  };
-}
-
-function mapEvent(r: RawEvent): EventRow {
-  return {
-    id: r.id,
-    workflowId: r.workflow_id,
-    name: r.name,
-    payload: deser(r.payload),
-    createdAt: r.created_at,
-    consumedAt: r.consumed_at,
   };
 }
 
@@ -262,12 +252,21 @@ export class SqliteStore implements Store {
     return claimed ? mapWorkflow(claimed) : null;
   }
 
-  async heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<void> {
-    const res = this.#s(
+  async heartbeat(
+    id: string,
+    fence: Fence,
+    leaseMs: number,
+    now: number,
+  ): Promise<HeartbeatResult> {
+    const row = this.#s(
       `UPDATE workflows SET lease_expires_at=@expires, heartbeat_at=@now, updated_at=@now
-       WHERE id=@id AND locked_by=@workerId AND lease_epoch=@epoch`,
-    ).run({ id, expires: now + leaseMs, now, workerId: fence.workerId, epoch: fence.leaseEpoch });
-    if (res.changes === 0) throw new LeaseLostError(id);
+       WHERE id=@id AND locked_by=@workerId AND lease_epoch=@epoch
+       RETURNING cancel_requested`,
+    ).get({ id, expires: now + leaseMs, now, workerId: fence.workerId, epoch: fence.leaseEpoch }) as
+      | { cancel_requested: number }
+      | undefined;
+    if (!row) throw new LeaseLostError(id);
+    return { cancelRequested: row.cancel_requested !== 0 };
   }
 
   async loadJournal(workflowId: string): Promise<StepRow[]> {
@@ -277,12 +276,19 @@ export class SqliteStore implements Store {
     return rows.map(mapStep);
   }
 
-  async appendStep(step: AppendStepInput): Promise<{ seq: number; replayed: boolean }> {
-    const tx = this.db.transaction((): { seq: number; replayed: boolean } => {
+  async appendStep(step: AppendStepInput): Promise<AppendStepResult> {
+    const tx = this.db.transaction((): AppendStepResult => {
+      // The cancel flag rides along with the fence read: same row, same transaction,
+      // zero extra queries (guarantees §9).
       const wf = this.#s(
-        "SELECT seq_counter, lease_epoch, locked_by FROM workflows WHERE id=?",
+        "SELECT seq_counter, lease_epoch, locked_by, cancel_requested FROM workflows WHERE id=?",
       ).get(step.workflowId) as
-        | { seq_counter: number; lease_epoch: number; locked_by: string | null }
+        | {
+            seq_counter: number;
+            lease_epoch: number;
+            locked_by: string | null;
+            cancel_requested: number;
+          }
         | undefined;
       if (!wf) throw new WorkflowNotFoundError(step.workflowId);
       if (
@@ -291,13 +297,16 @@ export class SqliteStore implements Store {
       ) {
         throw new LeaseLostError(step.workflowId);
       }
+      const cancelRequested = wf.cancel_requested !== 0;
       const existing = this.#s(
         "SELECT id, seq, status FROM steps WHERE workflow_id=? AND step_key=?",
       ).get(step.workflowId, step.stepKey) as
         | { id: string; seq: number; status: string }
         | undefined;
       if (existing) {
-        if (existing.status === "completed") return { seq: existing.seq, replayed: true };
+        if (existing.status === "completed") {
+          return { seq: existing.seq, replayed: true, cancelRequested };
+        }
         // failed -> update to the new terminal state, preserving seq
         this.#s(
           `UPDATE steps SET status=@status, kind=@kind, output=@output, error=@error,
@@ -312,7 +321,7 @@ export class SqliteStore implements Store {
           cost: step.cost ?? 0,
           now: step.now,
         });
-        return { seq: existing.seq, replayed: false };
+        return { seq: existing.seq, replayed: false, cancelRequested };
       }
       const seq = wf.seq_counter;
       this.#s("UPDATE workflows SET seq_counter=seq_counter+1, updated_at=@now WHERE id=@id").run({
@@ -336,7 +345,7 @@ export class SqliteStore implements Store {
         cost: step.cost ?? 0,
         now: step.now,
       });
-      return { seq, replayed: false };
+      return { seq, replayed: false, cancelRequested };
     });
     return tx.immediate();
   }
@@ -369,20 +378,6 @@ export class SqliteStore implements Store {
       `INSERT INTO events (id, workflow_id, name, payload, created_at, consumed_at)
        VALUES (@id, @wf, @name, @payload, @now, NULL)`,
     ).run({ id: this.#id(), wf: workflowId, name, payload: ser(payload), now });
-  }
-
-  async takeEvent(workflowId: string, name: string, now: number): Promise<EventRow | null> {
-    const tx = this.db.transaction((): RawEvent | null => {
-      const ev = this.#s(
-        `SELECT * FROM events WHERE workflow_id=? AND name=? AND consumed_at IS NULL
-         ORDER BY created_at ASC LIMIT 1`,
-      ).get(workflowId, name) as RawEvent | undefined;
-      if (!ev) return null;
-      this.#s("UPDATE events SET consumed_at=? WHERE id=?").run(now, ev.id);
-      return { ...ev, consumed_at: now };
-    });
-    const ev = tx.immediate();
-    return ev ? mapEvent(ev) : null;
   }
 
   async consumeEventIntoJournal(
@@ -443,18 +438,6 @@ export class SqliteStore implements Store {
       },
     );
     return tx.immediate();
-  }
-
-  async releaseLease(id: string, fence?: Fence): Promise<void> {
-    const params: Record<string, unknown> = { id, now: this.#clock.now() };
-    let sql =
-      "UPDATE workflows SET locked_by=NULL, lease_expires_at=NULL, updated_at=@now WHERE id=@id";
-    if (fence) {
-      sql += " AND locked_by=@workerId AND lease_epoch=@epoch";
-      params.workerId = fence.workerId;
-      params.epoch = fence.leaseEpoch;
-    }
-    this.#s(sql).run(params);
   }
 
   async listWorkflows(opts: ListWorkflowsOptions = {}): Promise<WorkflowRow[]> {

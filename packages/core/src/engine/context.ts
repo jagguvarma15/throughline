@@ -15,6 +15,7 @@ import { OrdinalCounter, deriveKey, stepKey } from "../keys";
 import type { Tracing } from "../otel";
 import { backoffMs, isNonRetryable, resolveRetry } from "../retry";
 import type {
+  CancelState,
   Context,
   DeterminismMode,
   Duration,
@@ -42,8 +43,11 @@ export interface RunContextDeps {
   budgetLimit?: number;
   /** Optional OpenTelemetry tracing (no-op without a registered provider). */
   tracing?: Tracing | null;
-  /** Cooperative-cancel probe; checked before each fresh step. */
-  checkCancel?: () => Promise<boolean>;
+  /**
+   * Shared cancel flag (guarantees §9): seeded from the claim, refreshed by every
+   * heartbeat and step commit, checked synchronously before each fresh step.
+   */
+  cancel?: CancelState;
   /** Determinism-guard mode (guarantees §4). Default: strict outside production. */
   determinism?: DeterminismMode;
 }
@@ -67,6 +71,11 @@ export class RunContext implements Context {
     this.tokens = new Budget(d.budgetLimit ?? Number.POSITIVE_INFINITY);
     this.#determinism =
       d.determinism ?? (process.env.NODE_ENV === "production" ? "warn" : "strict");
+  }
+
+  /** Fold the cancel flag reported by a journal write into the shared cancel state (§9). */
+  #noteCancel(r: { cancelRequested: boolean }): void {
+    if (r.cancelRequested && this.#d.cancel) this.#d.cancel.requested = true;
   }
 
   /** Determinism-guard sink: throw in strict mode, log in warn mode, ignore when off. */
@@ -157,7 +166,8 @@ export class RunContext implements Context {
     }
 
     // Cooperative cancellation: only a fresh execution is interrupted (guarantees §9).
-    if (this.#d.checkCancel && (await this.#d.checkCancel())) {
+    // The flag is fed by the claim, heartbeats, and step commits - no extra query here.
+    if (this.#d.cancel?.requested) {
       throw new CancelledError(this.#d.workflow.id);
     }
 
@@ -188,16 +198,18 @@ export class RunContext implements Context {
         // the retry budget survives a crash mid-retry-loop: on resume, line "attempt ="
         // above seeds from the journaled count and total executions stay <= maxAttempts.
         const se = serializeError(e);
-        await this.#d.store.appendStep({
-          workflowId: this.#d.workflow.id,
-          stepKey: key,
-          status: "failed",
-          kind: opts?.kind ?? "step",
-          error: se,
-          attempts: attempt,
-          now: this.#d.clock.now(),
-          fence: this.#d.fence,
-        });
+        this.#noteCancel(
+          await this.#d.store.appendStep({
+            workflowId: this.#d.workflow.id,
+            stepKey: key,
+            status: "failed",
+            kind: opts?.kind ?? "step",
+            error: se,
+            attempts: attempt,
+            now: this.#d.clock.now(),
+            fence: this.#d.fence,
+          }),
+        );
         if (isNonRetryable(e) || attempt >= policy.maxAttempts) {
           throw new StepError(key, attempt, se.message, e);
         }
@@ -208,17 +220,19 @@ export class RunContext implements Context {
       // is abandoned and replayed by another worker — NOT retried (avoids double effects).
       const cost = typeof rawCost === "function" ? rawCost(output) : (rawCost ?? 0);
       this.tokens.consume(cost);
-      await this.#d.store.appendStep({
-        workflowId: this.#d.workflow.id,
-        stepKey: key,
-        status: "completed",
-        kind: opts?.kind ?? "step",
-        output,
-        attempts: attempt,
-        cost,
-        now: this.#d.clock.now(),
-        fence: this.#d.fence,
-      });
+      this.#noteCancel(
+        await this.#d.store.appendStep({
+          workflowId: this.#d.workflow.id,
+          stepKey: key,
+          status: "completed",
+          kind: opts?.kind ?? "step",
+          output,
+          attempts: attempt,
+          cost,
+          now: this.#d.clock.now(),
+          fence: this.#d.fence,
+        }),
+      );
       return output;
     }
   }
@@ -274,7 +288,7 @@ export class RunContext implements Context {
 
     // No event. Resolve the (stable) deadline: when resuming a park on THIS wait, reuse the
     // persisted workflow.wakeAt; otherwise this is a fresh wait, so derive it from opts.timeout.
-    // (Same-name waits in a loop with timeouts are not individually tracked in v0.1.)
+    // (Same-name waits in a loop with timeouts are not individually tracked.)
     const isResumeOfThisWait =
       this.#d.workflow.waitEvent === name && this.#d.workflow.wakeAt !== null;
     const deadline = isResumeOfThisWait
@@ -284,16 +298,20 @@ export class RunContext implements Context {
         : null;
 
     if (deadline !== null && deadline !== undefined && this.#d.clock.now() >= deadline) {
-      await this.#d.store.appendStep({
-        workflowId: this.#d.workflow.id,
-        stepKey: key,
-        status: "completed",
-        kind: "timeout",
-        output: null,
-        attempts: 1,
-        now: this.#d.clock.now(),
-        fence: this.#d.fence,
-      });
+      // The handler may catch the TimeoutError and keep stepping, so fold the cancel
+      // flag from this commit too.
+      this.#noteCancel(
+        await this.#d.store.appendStep({
+          workflowId: this.#d.workflow.id,
+          stepKey: key,
+          status: "completed",
+          kind: "timeout",
+          output: null,
+          attempts: 1,
+          now: this.#d.clock.now(),
+          fence: this.#d.fence,
+        }),
+      );
       throw new TimeoutError(name);
     }
     throw new SuspendSignal({ waitEvent: name, wakeAt: deadline ?? undefined });

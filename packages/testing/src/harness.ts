@@ -3,6 +3,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 export type StoreFactory = () => Store | Promise<Store>;
 
+/** Poll until `cond` holds; wake delivery (NOTIFY) is asynchronous by nature. */
+async function waitFor(cond: () => boolean, timeoutMs = 2000): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error("timed out waiting for a wake");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 /**
  * Store-level conformance battery. Both store-sqlite and store-postgres run this
  * unchanged to prove they implement the same contract (incl. the deviations:
@@ -88,11 +97,31 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
       const c = await store.claim("w1", 1000, 100);
       if (!c) throw new Error("expected a claim");
-      await store.heartbeat(wf.id, { workerId: "w1", leaseEpoch: c.leaseEpoch }, 1000, 300);
+      const hb = await store.heartbeat(
+        wf.id,
+        { workerId: "w1", leaseEpoch: c.leaseEpoch },
+        1000,
+        300,
+      );
+      expect(hb.cancelRequested).toBe(false);
       expect((await store.getWorkflow(wf.id))?.leaseExpiresAt).toBe(1300);
       await expect(
         store.heartbeat(wf.id, { workerId: "w1", leaseEpoch: 999 }, 1000, 400),
       ).rejects.toBeInstanceOf(LeaseLostError);
+    });
+
+    it("heartbeat reports a requested cancel in the same write", async () => {
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      const c = await store.claim("w1", 1000, 100);
+      if (!c) throw new Error("expected a claim");
+      expect(await store.requestCancel(wf.id, 200)).toBe("requested");
+      const hb = await store.heartbeat(
+        wf.id,
+        { workerId: "w1", leaseEpoch: c.leaseEpoch },
+        1000,
+        300,
+      );
+      expect(hb.cancelRequested).toBe(true);
     });
 
     it("appendStep allocates seq; loadJournal is ordered by seq", async () => {
@@ -119,10 +148,49 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
         fence,
       });
       expect(r0.seq).toBe(0);
+      expect(r0.cancelRequested).toBe(false);
       expect(r1.seq).toBe(1);
       const j = await store.loadJournal(wf.id);
       expect(j.map((s) => s.stepKey)).toEqual(["a#0", "b#0"]);
       expect(j.find((s) => s.stepKey === "a#0")?.output).toBe(10);
+    });
+
+    it("appendStep reports a requested cancel in the same transaction", async () => {
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      const c = await store.claim("w1", 10_000, 1);
+      if (!c) throw new Error("expected a claim");
+      expect(await store.requestCancel(wf.id, 2)).toBe("requested");
+      const r = await store.appendStep({
+        workflowId: wf.id,
+        stepKey: "a#0",
+        status: "completed",
+        output: 1,
+        attempts: 1,
+        now: 3,
+        fence: { workerId: "w1", leaseEpoch: c.leaseEpoch },
+      });
+      expect(r.cancelRequested).toBe(true);
+      // Replays report it too: the flag is a row read, not tied to the insert.
+      const again = await store.appendStep({
+        workflowId: wf.id,
+        stepKey: "a#0",
+        status: "completed",
+        output: 1,
+        attempts: 1,
+        now: 4,
+        fence: { workerId: "w1", leaseEpoch: c.leaseEpoch },
+      });
+      expect(again.replayed).toBe(true);
+      expect(again.cancelRequested).toBe(true);
+    });
+
+    it("claim carries the cancel flag of a re-claimed run", async () => {
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      await store.claim("w1", 1000, 100); // lease -> 1100
+      expect(await store.requestCancel(wf.id, 200)).toBe("requested");
+      const re = await store.claim("w2", 1000, 5000); // expired -> crash re-claim
+      expect(re?.id).toBe(wf.id);
+      expect(re?.cancelRequested).toBe(true);
     });
 
     it("appendStep is an idempotent no-op on a completed key (replay)", async () => {
@@ -214,15 +282,6 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       ).rejects.toBeInstanceOf(WorkflowNotFoundError);
     });
 
-    it("addEvent + takeEvent consumes exactly once", async () => {
-      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
-      await store.addEvent(wf.id, "approve", { ok: true }, 5);
-      const first = await store.takeEvent(wf.id, "approve", 6);
-      expect(first?.payload).toEqual({ ok: true });
-      expect(first?.consumedAt).toBe(6);
-      expect(await store.takeEvent(wf.id, "approve", 7)).toBeNull();
-    });
-
     it("consumeEventIntoJournal atomically consumes an event and journals it", async () => {
       const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
       const c = await store.claim("w1", 10_000, 1);
@@ -270,12 +329,12 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
       const c = await store.claim("w1", 1000, 10);
       if (!c) throw new Error("expected a claim");
+      // Park and release in one patch - the exact release path the worker uses.
       await store.updateWorkflow(
         wf.id,
-        { status: "waiting", waitEvent: "go" },
+        { status: "waiting", waitEvent: "go", lockedBy: null, leaseExpiresAt: null },
         { workerId: "w1", leaseEpoch: c.leaseEpoch },
       );
-      await store.releaseLease(wf.id, { workerId: "w1", leaseEpoch: c.leaseEpoch });
       expect(await store.claim("w2", 1000, 20)).toBeNull(); // no event yet
       await store.addEvent(wf.id, "go", null, 30);
       const re = await store.claim("w2", 1000, 40);
@@ -286,12 +345,12 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
       const c = await store.claim("w1", 1000, 10);
       if (!c) throw new Error("expected a claim");
+      // Park and release in one patch - the exact release path the worker uses.
       await store.updateWorkflow(
         wf.id,
-        { status: "waiting", wakeAt: 5000 },
+        { status: "waiting", wakeAt: 5000, lockedBy: null, leaseExpiresAt: null },
         { workerId: "w1", leaseEpoch: c.leaseEpoch },
       );
-      await store.releaseLease(wf.id, { workerId: "w1", leaseEpoch: c.leaseEpoch });
       expect(await store.claim("w2", 1000, 4999)).toBeNull();
       expect((await store.claim("w2", 1000, 5000))?.id).toBe(wf.id);
     });
@@ -451,6 +510,60 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       });
       const s = await store.stats();
       expect(s.tokenSum).toBe(4_000_000_000);
+    });
+
+    // Optional capability: exercised only when the store implements subscribeWake
+    // (postgres); stores without it (sqlite) pass these trivially by returning early.
+    it("subscribeWake fires when a new workflow is created", async () => {
+      if (!store.subscribeWake) return;
+      let wakes = 0;
+      const unsubscribe = await store.subscribeWake(() => {
+        wakes++;
+      });
+      await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      await waitFor(() => wakes > 0);
+      await unsubscribe();
+    });
+
+    it("subscribeWake fires when an event is added", async () => {
+      if (!store.subscribeWake) return;
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      let wakes = 0;
+      const unsubscribe = await store.subscribeWake(() => {
+        wakes++;
+      });
+      await store.addEvent(wf.id, "go", null, 5);
+      await waitFor(() => wakes > 0);
+      await unsubscribe();
+    });
+
+    it("subscribeWake fires when a run is patched back to pending (redrive)", async () => {
+      if (!store.subscribeWake) return;
+      const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      await store.updateWorkflow(wf.id, { status: "dead" });
+      let wakes = 0;
+      const unsubscribe = await store.subscribeWake(() => {
+        wakes++;
+      });
+      await store.updateWorkflow(wf.id, { status: "pending" });
+      await waitFor(() => wakes > 0);
+      await unsubscribe();
+    });
+
+    it("subscribeWake stops firing after unsubscribe", async () => {
+      if (!store.subscribeWake) return;
+      let wakes = 0;
+      const unsubscribe = await store.subscribeWake(() => {
+        wakes++;
+      });
+      await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      await waitFor(() => wakes > 0);
+      await unsubscribe();
+      const seen = wakes;
+      await store.createWorkflow({ name: "t2", input: 0, now: 2 });
+      // Give a straggler a moment to (wrongly) arrive before asserting silence.
+      await new Promise((r) => setTimeout(r, 250));
+      expect(wakes).toBe(seen);
     });
   });
 }

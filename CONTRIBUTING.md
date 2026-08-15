@@ -47,17 +47,14 @@ one allowed exception, in `@through-line/adapters-ai-sdk`. CI enforces this via
 - Record/replay tests use golden traces (`toGolden`/`seedGolden`); refresh fixtures with
   `UPDATE_GOLDEN=1 pnpm -r test`.
 
-## Changesets
+## Versioning and releases
 
-Every user-facing change needs a changeset in the same PR:
-
-```bash
-pnpm changeset            # pick the affected packages and a bump level
-```
-
-All `@through-line/*` packages version in lockstep (a `fixed` group). CI opens a
-"Version Packages" PR on `main`; publishing to npm is a separate, manually dispatched
-workflow.
+All `@through-line/*` packages version in lockstep. Version bumps are plain commits:
+edit the `version` field in every `packages/*/package.json` to the same new value in
+the release PR. The patch number is the count of commits on `main` since the previous
+version commit. Publishing to npm is a separate, manually dispatched workflow
+(`Release` in GitHub Actions), which builds, publishes with provenance, and creates
+the unified `vX.Y.Z` tag and GitHub release.
 
 ## Pull requests
 

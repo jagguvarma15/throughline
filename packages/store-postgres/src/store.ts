@@ -1,10 +1,11 @@
 import {
   type AppendStepInput,
+  type AppendStepResult,
   type Clock,
   type ConsumeEventInput,
   DEFAULT_PRUNE_STATUSES,
-  type EventRow,
   type Fence,
+  type HeartbeatResult,
   LeaseLostError,
   type ListWorkflowsOptions,
   type NewWorkflow,
@@ -122,17 +123,6 @@ function mapStep(r: RawStep): StepRow {
   };
 }
 
-function mapEvent(r: RawEvent): EventRow {
-  return {
-    id: r.id,
-    workflowId: r.workflow_id,
-    name: r.name,
-    payload: j(r.payload),
-    createdAt: Number(r.created_at),
-    consumedAt: num(r.consumed_at),
-  };
-}
-
 const WF_COLUMN: Record<keyof WorkflowPatch, string> = {
   status: "status",
   output: "output",
@@ -150,11 +140,20 @@ export interface PostgresStoreOptions {
   idGen?: () => string;
 }
 
+/** NOTIFY channel poked whenever a workflow may have become claimable. */
+const WAKE_CHANNEL = "throughline_wake";
+
 export class PostgresStore implements Store {
   #pool: PgPool;
   #ownsPool: boolean;
   #clock: Clock;
   #id: () => string;
+  #wakeListeners = new Set<() => void>();
+  #listenClient: PgClient | null = null;
+  #listenSetup: Promise<void> | null = null;
+  #reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  #reconnectDelayMs = 1000;
+  #closed = false;
 
   constructor(poolOrUrl: PgPool | string, opts: PostgresStoreOptions = {}) {
     if (typeof poolOrUrl === "string") {
@@ -229,6 +228,8 @@ export class PostgresStore implements Store {
          RETURNING *`,
         [id, rec.name, ser(rec.input), key, rec.now],
       );
+      // Delivered on commit (transactional NOTIFY), so a woken worker always sees the row.
+      await c.query(`SELECT pg_notify('${WAKE_CHANNEL}', '')`);
       return mapWorkflow(ins.rows[0] as RawWf);
     });
   }
@@ -285,13 +286,21 @@ export class PostgresStore implements Store {
     });
   }
 
-  async heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<void> {
-    const r = await this.#pool.query(
+  async heartbeat(
+    id: string,
+    fence: Fence,
+    leaseMs: number,
+    now: number,
+  ): Promise<HeartbeatResult> {
+    const r = await this.#pool.query<{ cancel_requested: boolean }>(
       `UPDATE workflows SET lease_expires_at=$1, heartbeat_at=$2, updated_at=$2
-       WHERE id=$3 AND locked_by=$4 AND lease_epoch=$5`,
+       WHERE id=$3 AND locked_by=$4 AND lease_epoch=$5
+       RETURNING cancel_requested`,
       [now + leaseMs, now, id, fence.workerId, fence.leaseEpoch],
     );
-    if (r.rowCount === 0) throw new LeaseLostError(id);
+    const row = r.rows[0];
+    if (!row) throw new LeaseLostError(id);
+    return { cancelRequested: row.cancel_requested };
   }
 
   async loadJournal(workflowId: string): Promise<StepRow[]> {
@@ -302,15 +311,20 @@ export class PostgresStore implements Store {
     return r.rows.map(mapStep);
   }
 
-  async appendStep(step: AppendStepInput): Promise<{ seq: number; replayed: boolean }> {
+  async appendStep(step: AppendStepInput): Promise<AppendStepResult> {
     return this.#tx(async (c) => {
+      // The cancel flag rides along with the fence read: same locked row, same
+      // transaction, zero extra queries (guarantees §9).
       const wfRes = await c.query<{
         seq_counter: number;
         lease_epoch: number;
         locked_by: string | null;
-      }>("SELECT seq_counter, lease_epoch, locked_by FROM workflows WHERE id=$1 FOR UPDATE", [
-        step.workflowId,
-      ]);
+        cancel_requested: boolean;
+      }>(
+        `SELECT seq_counter, lease_epoch, locked_by, cancel_requested
+         FROM workflows WHERE id=$1 FOR UPDATE`,
+        [step.workflowId],
+      );
       const wf = wfRes.rows[0];
       if (!wf) throw new WorkflowNotFoundError(step.workflowId);
       if (
@@ -319,13 +333,16 @@ export class PostgresStore implements Store {
       ) {
         throw new LeaseLostError(step.workflowId);
       }
+      const cancelRequested = wf.cancel_requested;
       const exRes = await c.query<{ seq: number; status: string }>(
         "SELECT seq, status FROM steps WHERE workflow_id=$1 AND step_key=$2",
         [step.workflowId, step.stepKey],
       );
       const existing = exRes.rows[0];
       if (existing) {
-        if (existing.status === "completed") return { seq: existing.seq, replayed: true };
+        if (existing.status === "completed") {
+          return { seq: existing.seq, replayed: true, cancelRequested };
+        }
         await c.query(
           `UPDATE steps SET status=$1, kind=$2, output=$3::jsonb, error=$4::jsonb,
              attempts=$5, cost=$6, completed_at=$7 WHERE workflow_id=$8 AND step_key=$9`,
@@ -341,7 +358,7 @@ export class PostgresStore implements Store {
             step.stepKey,
           ],
         );
-        return { seq: existing.seq, replayed: false };
+        return { seq: existing.seq, replayed: false, cancelRequested };
       }
       const seq = wf.seq_counter;
       await c.query("UPDATE workflows SET seq_counter=seq_counter+1, updated_at=$2 WHERE id=$1", [
@@ -366,7 +383,7 @@ export class PostgresStore implements Store {
           step.now,
         ],
       );
-      return { seq, replayed: false };
+      return { seq, replayed: false, cancelRequested };
     });
   }
 
@@ -395,28 +412,25 @@ export class PostgresStore implements Store {
     }
     const r = await this.#pool.query(sql, vals);
     if (fence && r.rowCount === 0) throw new LeaseLostError(id);
+    // A run patched back to pending (ops.retry redrive) is claimable again. The
+    // notify is a follow-up statement, not atomic with the update; polling is the
+    // correctness backstop if it is lost.
+    if (patch.status === "pending" && (r.rowCount ?? 0) > 0) {
+      await this.#pool.query(`SELECT pg_notify('${WAKE_CHANNEL}', '')`).catch(() => {});
+    }
   }
 
   async addEvent(workflowId: string, name: string, payload: unknown, now: number): Promise<void> {
+    // Single atomic statement: the notify fires only if the insert happened.
     await this.#pool.query(
-      `INSERT INTO events (id, workflow_id, name, payload, created_at, consumed_at)
-       VALUES ($1,$2,$3,$4::jsonb,$5,NULL)`,
+      `WITH ins AS (
+         INSERT INTO events (id, workflow_id, name, payload, created_at, consumed_at)
+         VALUES ($1,$2,$3,$4::jsonb,$5,NULL)
+         RETURNING id
+       )
+       SELECT pg_notify('${WAKE_CHANNEL}', '') FROM ins`,
       [this.#id(), workflowId, name, ser(payload), now],
     );
-  }
-
-  async takeEvent(workflowId: string, name: string, now: number): Promise<EventRow | null> {
-    return this.#tx(async (c) => {
-      const sel = await c.query<RawEvent>(
-        `SELECT * FROM events WHERE workflow_id=$1 AND name=$2 AND consumed_at IS NULL
-         ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,
-        [workflowId, name],
-      );
-      const ev = sel.rows[0];
-      if (!ev) return null;
-      await c.query("UPDATE events SET consumed_at=$1 WHERE id=$2", [now, ev.id]);
-      return mapEvent({ ...ev, consumed_at: String(now) });
-    });
   }
 
   async consumeEventIntoJournal(
@@ -580,18 +594,105 @@ export class PostgresStore implements Store {
     });
   }
 
-  async releaseLease(id: string, fence?: Fence): Promise<void> {
-    const vals: unknown[] = [this.#clock.now(), id];
-    let sql =
-      "UPDATE workflows SET locked_by=NULL, lease_expires_at=NULL, updated_at=$1 WHERE id=$2";
-    if (fence) {
-      sql += " AND locked_by=$3 AND lease_epoch=$4";
-      vals.push(fence.workerId, fence.leaseEpoch);
+  /**
+   * LISTEN-based push wakeups (optional Store capability). Holds one dedicated
+   * client from the pool while subscribers exist and reconnects with capped
+   * backoff if that connection drops. Best-effort by design: any failure here
+   * only costs wake latency, because workers keep polling regardless.
+   */
+  async subscribeWake(listener: () => void): Promise<() => Promise<void>> {
+    this.#wakeListeners.add(listener);
+    try {
+      await this.#ensureListening();
+    } catch (e) {
+      this.#wakeListeners.delete(listener);
+      throw e;
     }
-    await this.#pool.query(sql, vals);
+    return async () => {
+      this.#wakeListeners.delete(listener);
+      if (this.#wakeListeners.size === 0) await this.#teardownListener();
+    };
+  }
+
+  async #ensureListening(): Promise<void> {
+    if (this.#closed || this.#listenClient || this.#wakeListeners.size === 0) return;
+    if (!this.#listenSetup) {
+      this.#listenSetup = (async () => {
+        const c = await this.#pool.connect();
+        try {
+          await c.query(`LISTEN ${WAKE_CHANNEL}`);
+        } catch (e) {
+          c.release(true);
+          throw e;
+        }
+        c.on("notification", () => {
+          for (const l of this.#wakeListeners) l();
+        });
+        c.on("error", () => this.#restartListener());
+        this.#listenClient = c;
+      })();
+    }
+    try {
+      await this.#listenSetup;
+    } finally {
+      this.#listenSetup = null;
+    }
+  }
+
+  #restartListener(): void {
+    const c = this.#listenClient;
+    this.#listenClient = null;
+    if (c) {
+      c.removeAllListeners("notification");
+      c.removeAllListeners("error");
+      try {
+        c.release(true);
+      } catch {
+        // Already released.
+      }
+    }
+    if (this.#closed || this.#wakeListeners.size === 0 || this.#reconnectTimer) return;
+    const delay = this.#reconnectDelayMs;
+    this.#reconnectDelayMs = Math.min(delay * 2, 30_000);
+    const timer = setTimeout(() => {
+      this.#reconnectTimer = null;
+      this.#ensureListening()
+        .then(() => {
+          this.#reconnectDelayMs = 1000;
+          // Poke subscribers once: anything notified during the gap was lost.
+          for (const l of this.#wakeListeners) l();
+        })
+        .catch(() => this.#restartListener());
+    }, delay);
+    timer.unref?.();
+    this.#reconnectTimer = timer;
+  }
+
+  async #teardownListener(): Promise<void> {
+    if (this.#reconnectTimer) {
+      clearTimeout(this.#reconnectTimer);
+      this.#reconnectTimer = null;
+    }
+    const c = this.#listenClient;
+    this.#listenClient = null;
+    if (!c) return;
+    c.removeAllListeners("notification");
+    c.removeAllListeners("error");
+    try {
+      await c.query("UNLISTEN *");
+      c.release();
+    } catch {
+      try {
+        c.release(true);
+      } catch {
+        // Already released.
+      }
+    }
   }
 
   async close(): Promise<void> {
+    this.#closed = true;
+    await this.#teardownListener();
     if (this.#ownsPool) await this.#pool.end();
   }
 }

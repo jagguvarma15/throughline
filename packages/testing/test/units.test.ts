@@ -20,7 +20,7 @@ describe("faultStore", () => {
     const inner = {
       appendStep: async (s: AppendStepInput) => {
         appended.push(s);
-        return { seq: appended.length - 1, replayed: false };
+        return { seq: appended.length - 1, replayed: false, cancelRequested: false };
       },
       close: () => {},
     } as unknown as Store;
@@ -38,7 +38,7 @@ describe("faultStore", () => {
   it("delegates appendStep and returns the inner result", async () => {
     const { inner, appended } = stub();
     const r = await faultStore(inner, {}).appendStep(step);
-    expect(r).toEqual({ seq: 0, replayed: false });
+    expect(r).toEqual({ seq: 0, replayed: false, cancelRequested: false });
     expect(appended).toHaveLength(1);
   });
 

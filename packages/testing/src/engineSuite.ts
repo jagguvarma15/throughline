@@ -336,16 +336,22 @@ export function defineEngineSuite(makeStore: StoreFactory): void {
     it("cooperative cancel stops a running workflow at the next step boundary", async () => {
       const store = await makeStore();
       const tf = throughline({ store, clock: controlledClock(1000), sleep: noSleep });
-      const calls = { a: 0, b: 0 };
+      const calls = { a: 0, b: 0, c: 0 };
       tf.task("t", async (ctx) => {
         await ctx.step("a", async () => {
           calls.a++;
           return 1;
         });
         await tf.cancel(ctx.runId); // request cancel mid-run (workflow is running)
+        // The flag is observed by b's journal commit (guarantees §9), so b still
+        // runs; c is refused at its fresh-step boundary.
         await ctx.step("b", async () => {
           calls.b++;
           return 2;
+        });
+        await ctx.step("c", async () => {
+          calls.c++;
+          return 3;
         });
         return "done";
       });
@@ -353,7 +359,25 @@ export function defineEngineSuite(makeStore: StoreFactory): void {
       await tf.worker({ leaseMs: 1000, workerId: "w" }).runOnce();
       const run = await tf.getRun(id);
       expect(run?.status).toBe("cancelled");
-      expect(calls).toEqual({ a: 1, b: 0 });
+      expect(calls).toEqual({ a: 1, b: 1, c: 0 });
+      await store.close();
+    });
+
+    it("a cancel requested during the final step still lets the run complete", async () => {
+      const store = await makeStore();
+      const tf = throughline({ store, clock: controlledClock(1000), sleep: noSleep });
+      tf.task("t", async (ctx) => {
+        await ctx.step("a", async () => 1);
+        await tf.cancel(ctx.runId);
+        // No fresh step follows b, so there is no boundary left to interrupt:
+        // cooperative cancel is best-effort by contract (guarantees §9).
+        return ctx.step("b", async () => 2);
+      });
+      const id = await tf.start("t", null);
+      await tf.worker({ leaseMs: 1000, workerId: "w" }).runOnce();
+      const run = await tf.getRun(id);
+      expect(run?.status).toBe("completed");
+      expect(run?.output).toBe(2);
       await store.close();
     });
 

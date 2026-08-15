@@ -5,7 +5,7 @@ datasources:
     type: prometheus
     access: proxy
     orgId: 1
-    url: http://taskflow_prometheus:9090
+    url: http://throughline_prometheus:9090
     basicAuth: false
     isDefault: true
     version: 1
@@ -15,7 +15,7 @@ datasources:
     type: loki
     access: proxy
     orgId: 1
-    url: http://taskflow_loki:3100
+    url: http://throughline_loki:3100
     basicAuth: false
     isDefault: false
     version: 1

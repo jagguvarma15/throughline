@@ -16,10 +16,6 @@ production, and is **bring-your-own-LLM**.
 It is a library you `import` — **not** an agent framework, an LLM-provider wrapper, a no-code
 builder, or a hosted platform.
 
-> **Project history:** Throughline began as **TaskFlow**, a containerized task-management
-> demo, and was refactored into this durable-execution library — keeping TaskFlow's
-> production-grade Docker, CI, and observability stack as the reference deployment.
-
 ## Install
 
 ```bash
@@ -121,8 +117,27 @@ runs surface in the dashboard's Dead letter view with one-click redrive.
 [Wrap your existing loop](docs/recipes/wrap-your-loop.md),
 [human approval](docs/recipes/human-approval.md),
 [record/replay testing](docs/recipes/record-replay-testing.md),
-[budgets](docs/recipes/budgets.md). AI-friendly indexes: [llms.txt](llms.txt) and
-[AGENTS.md](AGENTS.md); `pnpm docs:api` generates the API reference.
+[budgets](docs/recipes/budgets.md). `pnpm docs:api` generates the API reference.
+
+## Performance
+
+Measured by the repo's own [bench suite](bench/README.md) (`pnpm bench`) on a laptop,
+Node 20, one process per store; run it yourself before trusting anyone's numbers:
+
+| Metric | SQLite (file) | Postgres |
+|---|---|---|
+| Journaled steps per second, one worker | ~25,000 | ~950 |
+| Resume a parked run, 1,000-step journal (p50) | 1.0 ms | 5.6 ms |
+| Replay cost per journaled step | ~1 us | ~2.5 us |
+| Start-to-completion p95 under a live worker | 1.0 ms | 5.7 ms with notify, 219 ms polling |
+
+The scheduling model behind those numbers: idle workers back off exponentially from
+`pollIntervalMs` (200 ms) to `maxPollIntervalMs` (5 s), cutting idle database load to one
+probe per 5 s per loop; on Postgres, LISTEN/NOTIFY wakes idle workers in milliseconds when
+a run is started, signalled, or redriven, and polling remains the correctness backstop.
+Durable timers are observed within `maxPollIntervalMs` of their deadline - lower the cap
+if you need tighter timers. The full latency contract is in
+[docs/guarantees.md](docs/guarantees.md).
 
 ## Reference stack
 
