@@ -3,6 +3,7 @@ import { parseDuration } from "../duration";
 import { CancelledError, LeaseLostError, RecoveryExhaustedError, serializeError } from "../errors";
 import { silentLogger } from "../logger";
 import type {
+  CancelState,
   DeterminismMode,
   Duration,
   Fence,
@@ -13,6 +14,7 @@ import type {
   WorkflowPatch,
 } from "../types";
 import { runWorkflow } from "./run";
+import { WakeController } from "./wake";
 
 /** Terminal-run garbage collection swept opportunistically by the worker. */
 export interface RetentionOptions {
@@ -36,6 +38,13 @@ export interface WorkerDeps {
   workerId?: string;
   leaseMs?: number;
   pollIntervalMs?: number;
+  /**
+   * Cap for the idle-poll backoff: an idle loop doubles its delay from
+   * pollIntervalMs up to this cap, and resets on a claim or a push wakeup.
+   * This cap also bounds how late a due wakeAt timer is observed, since timers
+   * are only discovered by polling. Default 5000.
+   */
+  maxPollIntervalMs?: number;
   concurrency?: number;
   /**
    * Poison-pill guard (guarantees §5): a run re-claimed after crashing more than this
@@ -61,6 +70,7 @@ export class Worker {
   #workerId: string;
   #leaseMs: number;
   #pollIntervalMs: number;
+  #maxPollIntervalMs: number;
   #concurrency: number;
   #maxRecoveryAttempts: number;
   #determinism?: DeterminismMode;
@@ -69,6 +79,8 @@ export class Worker {
   #running = false;
   #loops: Promise<void>[] = [];
   #initialized = false;
+  #wake = new WakeController();
+  #wakeSubscription: Promise<(() => Promise<void>) | null> | null = null;
 
   constructor(d: WorkerDeps) {
     this.#store = d.store;
@@ -80,6 +92,7 @@ export class Worker {
     this.#workerId = d.workerId ?? `worker-${(workerSeq++).toString(36)}-${process.pid}`;
     this.#leaseMs = d.leaseMs ?? 30_000;
     this.#pollIntervalMs = d.pollIntervalMs ?? 200;
+    this.#maxPollIntervalMs = Math.max(this.#pollIntervalMs, d.maxPollIntervalMs ?? 5000);
     this.#concurrency = d.concurrency ?? 1;
     this.#maxRecoveryAttempts = d.maxRecoveryAttempts ?? 10;
     this.#determinism = d.determinism;
@@ -147,7 +160,10 @@ export class Worker {
       return true;
     }
 
-    const heartbeat = this.#startHeartbeat(wf.id, fence);
+    // Seeded from the claimed row (covers a cancel requested while the run sat
+    // crashed); refreshed by every heartbeat and step commit (guarantees §9).
+    const cancel: CancelState = { requested: wf.cancelRequested };
+    const heartbeat = this.#startHeartbeat(wf.id, fence, cancel);
     try {
       const outcome = await runWorkflow({
         store: this.#store,
@@ -159,7 +175,7 @@ export class Worker {
         fence,
         logger: this.#logger,
         sleep: this.#sleep,
-        checkCancel: async () => (await this.#store.getWorkflow(wf.id))?.cancelRequested ?? false,
+        cancel,
         determinism: this.#determinism,
       });
       if (outcome.status === "completed") {
@@ -194,16 +210,30 @@ export class Worker {
   start(): void {
     if (this.#running) return;
     this.#running = true;
+    // Optional store capability: push wakeups reset the idle backoff instantly.
+    // Polling keeps running regardless, so a failed subscription only costs latency.
+    if (this.#store.subscribeWake) {
+      this.#wakeSubscription = this.#store
+        .subscribeWake(() => this.#wake.wakeAll())
+        .catch(() => null);
+    }
     for (let i = 0; i < this.#concurrency; i++) this.#loops.push(this.#loop());
   }
 
   async stop(): Promise<void> {
     this.#running = false;
+    this.#wake.wakeAll();
     await Promise.allSettled(this.#loops);
     this.#loops = [];
+    if (this.#wakeSubscription) {
+      const unsubscribe = await this.#wakeSubscription;
+      this.#wakeSubscription = null;
+      if (unsubscribe) await unsubscribe().catch(() => {});
+    }
   }
 
   async #loop(): Promise<void> {
+    let idleDelay = this.#pollIntervalMs;
     while (this.#running) {
       let did = false;
       try {
@@ -211,7 +241,15 @@ export class Worker {
       } catch (e) {
         this.#logger.error("worker loop error", e);
       }
-      if (!did && this.#running) await this.#sleep(this.#pollIntervalMs);
+      if (did) {
+        idleDelay = this.#pollIntervalMs;
+        continue;
+      }
+      if (!this.#running) break;
+      const woken = await this.#wake.sleep(idleDelay, this.#sleep);
+      idleDelay = woken
+        ? this.#pollIntervalMs
+        : Math.min(idleDelay * 2, this.#maxPollIntervalMs);
     }
   }
 
@@ -231,12 +269,21 @@ export class Worker {
     }
   }
 
-  #startHeartbeat(id: string, fence: Fence): ReturnType<typeof setInterval> {
+  #startHeartbeat(
+    id: string,
+    fence: Fence,
+    cancel: CancelState,
+  ): ReturnType<typeof setInterval> {
     const interval = Math.max(1, Math.floor(this.#leaseMs / 3));
     return setInterval(() => {
-      this.#store.heartbeat(id, fence, this.#leaseMs, this.#clock.now()).catch(() => {
-        // Lease lost — the in-flight run will fail its next fenced write and abandon.
-      });
+      this.#store
+        .heartbeat(id, fence, this.#leaseMs, this.#clock.now())
+        .then((r) => {
+          if (r.cancelRequested) cancel.requested = true;
+        })
+        .catch(() => {
+          // Lease lost — the in-flight run will fail its next fenced write and abandon.
+        });
     }, interval);
   }
 }
