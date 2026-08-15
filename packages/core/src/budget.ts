@@ -2,9 +2,9 @@ import type { TokenBudget } from "./types";
 
 /**
  * Mutable token accounting backing `ctx.tokens`. The step-gate (throw
- * BudgetExceededError before a fresh fn) is wired in Phase 2.2; this is the
- * primitive it builds on. Accounting is reconstructed from journaled step costs
- * on replay so totals are identical across replays (guarantees §8).
+ * BudgetExceededError before a fresh fn) builds on this primitive. Accounting
+ * is reconstructed from journaled step costs on replay so totals are identical
+ * across replays (guarantees §8).
  */
 export class Budget implements TokenBudget {
   readonly limit: number;
