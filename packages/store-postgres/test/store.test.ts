@@ -47,6 +47,48 @@ if (available) {
     });
   });
 
+  describe("postgres wake listener", () => {
+    it("recovers from a killed LISTEN backend and delivers later wakes", async () => {
+      const p = pool as pg.Pool;
+      const store = postgres(p);
+      await store.reset();
+      let wakes = 0;
+      const unsubscribe = await store.subscribeWake(() => {
+        wakes++;
+      });
+
+      await store.createWorkflow({ name: "t", input: 0, now: 1 });
+      await waitFor(() => wakes > 0);
+
+      // Kill the dedicated LISTEN backend out from under the store.
+      const killer = new pg.Pool({ connectionString: url, max: 1 });
+      await killer.query(
+        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+         WHERE pid <> pg_backend_pid() AND query ILIKE '%LISTEN throughline_wake%'`,
+      );
+      await killer.end();
+
+      // The reconnect uses a capped backoff starting at 1s; poll generously and
+      // keep writing so a wake arrives once the new LISTEN is established.
+      const before = wakes;
+      const deadline = Date.now() + 15_000;
+      while (wakes === before && Date.now() < deadline) {
+        await store.createWorkflow({ name: "t", input: 0, now: 2 });
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      expect(wakes).toBeGreaterThan(before);
+      await unsubscribe();
+    }, 20_000);
+  });
+
+  async function waitFor(cond: () => boolean, timeoutMs = 2000): Promise<void> {
+    const start = Date.now();
+    while (!cond()) {
+      if (Date.now() - start > timeoutMs) throw new Error("timed out waiting for a wake");
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+
   afterAll(async () => {
     await pool?.end();
   });
