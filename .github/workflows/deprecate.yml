@@ -1,0 +1,36 @@
+name: Deprecate superseded packages
+
+# One-shot maintenance workflow: marks the five pre-consolidation packages as
+# deprecated on npm, pointing installers at @through-line/core. Manual dispatch
+# only; remove this file once it has run successfully.
+on:
+  workflow_dispatch:
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard - require NPM_TOKEN
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Deprecate the superseded packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm deprecate "@through-line/store-sqlite@*" "Moved into @through-line/core as the subpath @through-line/core/sqlite. Install @through-line/core."
+          npm deprecate "@through-line/store-postgres@*" "Moved into @through-line/core as the subpath @through-line/core/postgres. Install @through-line/core."
+          npm deprecate "@through-line/adapters-ai-sdk@*" "Moved into @through-line/core as the subpath @through-line/core/ai-sdk. Install @through-line/core."
+          npm deprecate "@through-line/adapters-llm@*" "Moved into @through-line/core as the subpath @through-line/core/llm. Install @through-line/core."
+          npm deprecate "@through-line/testing@*" "Moved into @through-line/core as the subpath @through-line/core/testing. Install @through-line/core."
