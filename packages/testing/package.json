@@ -1,6 +1,6 @@
 {
   "name": "@through-line/testing",
-  "version": "0.3.172",
+  "version": "0.3.199",
   "private": true,
   "description": "Throughline test harness: fault-injection store, store/engine conformance suites, record/replay.",
   "license": "MIT",
