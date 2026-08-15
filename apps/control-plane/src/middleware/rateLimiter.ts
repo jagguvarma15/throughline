@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 
-// Ported from the TaskFlow backend (rate-limiter-flexible).
 const limiter = new RateLimiterMemory({ keyPrefix: "control-plane", points: 100, duration: 60 });
 
 export async function rateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
