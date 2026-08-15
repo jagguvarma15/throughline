@@ -19,14 +19,14 @@ builder, or a hosted platform.
 ## Install
 
 ```bash
-pnpm add @through-line/core @through-line/store-sqlite
+pnpm add @through-line/core
 ```
 
 ## Quickstart
 
 ```ts
 import { throughline } from "@through-line/core";
-import { sqlite } from "@through-line/store-sqlite";
+import { sqlite } from "@through-line/core/sqlite";
 
 const tf = throughline({ store: sqlite("./throughline.db") });
 
@@ -73,37 +73,41 @@ after a `kill -9` with no duplicate model calls, pauses for human approval befor
 halts a runaway loop at a token budget, and replays its whole trajectory offline for ~$0.
 
 **[examples/ai-sdk-agent](examples/ai-sdk-agent)** is the same durability applied to a
-[Vercel AI SDK](https://ai-sdk.dev) tool-calling loop via `@through-line/adapters-ai-sdk`:
+[Vercel AI SDK](https://ai-sdk.dev) tool-calling loop via `@through-line/core/ai-sdk`:
 each `generateText` model call and tool execution is a journaled step, so the loop itself
 crash-resumes with exactly-once tool effects.
 
-## Packages
+## One package
 
-| Package | Purpose |
+Everything ships in `@through-line/core`: the engine at the root, and the rest as
+subpath exports. The two executables (`throughline`, `throughline-mcp`) install with it.
+
+| Import | Purpose |
 |---|---|
 | `@through-line/core` | Durable engine: `throughline()`, `task()`, `ctx`, worker, replay, retries, budgets, OTel. |
-| `@through-line/store-sqlite` | Default durable store (better-sqlite3). |
-| `@through-line/store-postgres` | Production durable store (pg). |
-| `@through-line/adapters-llm` | BYO-LLM helper: wrap a model call in a durable step. |
-| `@through-line/adapters-ai-sdk` | Vercel AI SDK adapter: durable `generateText` model calls + exactly-once tools. |
-| `@through-line/testing` | Fault-injection store, store/engine conformance, property + golden-trace harness. |
-| `@through-line/cli` | Operator CLI: `throughline start / list / status / signal / approve / cancel / stats`. |
-| `@through-line/mcp` | MCP server so AI agents can start, inspect, approve, and cancel durable runs. |
-| `apps/control-plane` | Auth-gated read/op HTTP API over the store (start, signal, cancel, `/metrics`). |
-| `apps/dashboard` | Durable-run UI (runs, timeline, approvals, replay). |
+| `@through-line/core/sqlite` | Default durable store (better-sqlite3). |
+| `@through-line/core/postgres` | Production durable store (pg). |
+| `@through-line/core/llm` | BYO-LLM helper: wrap a model call in a durable step. |
+| `@through-line/core/ai-sdk` | Vercel AI SDK adapter: durable `generateText` model calls + exactly-once tools (needs the `ai` peer). |
+| `@through-line/core/testing` | Fault-injection store, store/engine conformance, property + golden-trace harness (needs the `vitest` peer). |
+| `@through-line/core/mcp` | Transport-agnostic MCP server factory; the stdio wiring is the `throughline-mcp` bin. |
+
+The repo additionally contains the private reference apps `apps/control-plane` (auth-gated
+read/op HTTP API with `/metrics`) and `apps/dashboard` (durable-run UI), which are not
+published to npm.
 
 ## Operate runs from the terminal or an AI agent
 
 ```bash
 # CLI: JSON in, JSON out - works directly on the store or against a control-plane URL.
-npx @through-line/cli list --status waiting
-npx @through-line/cli approve <run-id> publish
-npx @through-line/cli retry <run-id>                 # redrive a dead run, journal preserved
-npx @through-line/cli prune --older-than 7d          # terminal-run GC
-npx @through-line/cli migrate                        # apply store schema migrations
+npx -y -p @through-line/core throughline list --status waiting
+npx -y -p @through-line/core throughline approve <run-id> publish
+npx -y -p @through-line/core throughline retry <run-id>      # redrive a dead run
+npx -y -p @through-line/core throughline prune --older-than 7d
+npx -y -p @through-line/core throughline migrate             # apply schema migrations
 
 # MCP: let Claude (or any MCP host) start, watch, and approve durable runs.
-claude mcp add throughline --env THROUGHLINE_DB=./throughline.db -- npx @through-line/mcp
+claude mcp add throughline --env THROUGHLINE_DB=./throughline.db -- npx -y -p @through-line/core throughline-mcp
 ```
 
 The MCP server exposes `start_run`, `wait_for_run`, `get_run`, `approve_run`,
