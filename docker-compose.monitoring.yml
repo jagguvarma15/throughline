@@ -2,7 +2,7 @@ services:
   # Prometheus - Metrics collection
   prometheus:
     image: prom/prometheus:latest
-    container_name: taskflow_prometheus
+    container_name: throughline_prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -22,7 +22,7 @@ services:
   # Grafana - Visualization
   grafana:
     image: grafana/grafana:latest
-    container_name: taskflow_grafana
+    container_name: throughline_grafana
     ports:
       - "3004:3000"
     environment:
@@ -38,7 +38,7 @@ services:
   # cAdvisor - Container metrics
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
-    container_name: taskflow_cadvisor
+    container_name: throughline_cadvisor
     ports:
       - "8081:8080"
     volumes:
@@ -56,7 +56,7 @@ services:
   # Node Exporter - System metrics
   node-exporter:
     image: prom/node-exporter:latest
-    container_name: taskflow_node_exporter
+    container_name: throughline_node_exporter
     ports:
       - "9100:9100"
     volumes:
@@ -74,7 +74,7 @@ services:
   # AlertManager - Alert routing
   alertmanager:
     image: prom/alertmanager:latest
-    container_name: taskflow_alertmanager
+    container_name: throughline_alertmanager
     ports:
       - "9093:9093"
     volumes:
@@ -90,7 +90,7 @@ services:
   # Loki - Log aggregation
   loki:
     image: grafana/loki:latest
-    container_name: taskflow_loki
+    container_name: throughline_loki
     ports:
       - "3100:3100"
     volumes:
@@ -103,7 +103,7 @@ services:
   # Promtail - Log collection
   promtail:
     image: grafana/promtail:latest
-    container_name: taskflow_promtail
+    container_name: throughline_promtail
     volumes:
       - ./monitoring/promtail/promtail.yml:/etc/promtail/config.yml
       - /var/log:/var/log:ro
