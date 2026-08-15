@@ -97,7 +97,12 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       const wf = await store.createWorkflow({ name: "t", input: 0, now: 1 });
       const c = await store.claim("w1", 1000, 100);
       if (!c) throw new Error("expected a claim");
-      const hb = await store.heartbeat(wf.id, { workerId: "w1", leaseEpoch: c.leaseEpoch }, 1000, 300);
+      const hb = await store.heartbeat(
+        wf.id,
+        { workerId: "w1", leaseEpoch: c.leaseEpoch },
+        1000,
+        300,
+      );
       expect(hb.cancelRequested).toBe(false);
       expect((await store.getWorkflow(wf.id))?.leaseExpiresAt).toBe(1300);
       await expect(
@@ -110,7 +115,12 @@ export function defineStoreSuite(makeStore: StoreFactory): void {
       const c = await store.claim("w1", 1000, 100);
       if (!c) throw new Error("expected a claim");
       expect(await store.requestCancel(wf.id, 200)).toBe("requested");
-      const hb = await store.heartbeat(wf.id, { workerId: "w1", leaseEpoch: c.leaseEpoch }, 1000, 300);
+      const hb = await store.heartbeat(
+        wf.id,
+        { workerId: "w1", leaseEpoch: c.leaseEpoch },
+        1000,
+        300,
+      );
       expect(hb.cancelRequested).toBe(true);
     });
 
