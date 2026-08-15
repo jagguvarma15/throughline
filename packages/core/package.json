@@ -1,6 +1,6 @@
 {
   "name": "@through-line/core",
-  "version": "0.3.172",
+  "version": "0.3.199",
   "description": "Throughline: the durable-execution runtime for AI agents in one package - engine, SQLite and Postgres stores, AI SDK and BYO-LLM adapters, testing suites, CLI, and MCP server.",
   "license": "MIT",
   "keywords": [
