@@ -252,7 +252,12 @@ export class SqliteStore implements Store {
     return claimed ? mapWorkflow(claimed) : null;
   }
 
-  async heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<HeartbeatResult> {
+  async heartbeat(
+    id: string,
+    fence: Fence,
+    leaseMs: number,
+    now: number,
+  ): Promise<HeartbeatResult> {
     const row = this.#s(
       `UPDATE workflows SET lease_expires_at=@expires, heartbeat_at=@now, updated_at=@now
        WHERE id=@id AND locked_by=@workerId AND lease_epoch=@epoch
