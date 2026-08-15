@@ -1,6 +1,6 @@
 {
   "name": "@through-line/mcp",
-  "version": "0.3.172",
+  "version": "0.3.199",
   "private": true,
   "description": "Throughline MCP server: let AI agents start, inspect, signal, approve, and cancel durable runs.",
   "license": "MIT",
