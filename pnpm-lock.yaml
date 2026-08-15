@@ -197,10 +197,35 @@ importers:
         version: link:../store-sqlite
 
   packages/core:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.12.1
+        version: 1.30.0(zod@3.25.76)
+      ai:
+        specifier: ^7.0.0
+        version: 7.0.14(zod@3.25.76)
+      better-sqlite3:
+        specifier: ^12.11.1
+        version: 12.11.1
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
+      vitest:
+        specifier: '>=2'
+        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.1
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.13
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
 
   packages/mcp:
     dependencies:
