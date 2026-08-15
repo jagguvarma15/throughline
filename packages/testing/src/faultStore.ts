@@ -1,8 +1,9 @@
 import {
   type AppendStepInput,
+  type AppendStepResult,
   type ConsumeEventInput,
-  type EventRow,
   type Fence,
+  type HeartbeatResult,
   LeaseLostError,
   type ListWorkflowsOptions,
   type NewWorkflow,
@@ -41,9 +42,14 @@ export class FaultStore implements Store {
   #plan: FaultPlan;
   #commits = 0;
 
+  /** Mirrored only when the wrapped store has the capability (optional method). */
+  subscribeWake?: (listener: () => void) => Promise<() => Promise<void>>;
+
   constructor(inner: Store, plan: FaultPlan) {
     this.#inner = inner;
     this.#plan = plan;
+    const subscribe = inner.subscribeWake?.bind(inner);
+    if (subscribe) this.subscribeWake = subscribe;
   }
 
   init(): Promise<void> {
@@ -62,7 +68,7 @@ export class FaultStore implements Store {
     return this.#inner.claim(workerId, leaseMs, now);
   }
 
-  heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<void> {
+  heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<HeartbeatResult> {
     return this.#inner.heartbeat(id, fence, leaseMs, now);
   }
 
@@ -70,7 +76,7 @@ export class FaultStore implements Store {
     return this.#inner.loadJournal(workflowId);
   }
 
-  async appendStep(step: AppendStepInput): Promise<{ seq: number; replayed: boolean }> {
+  async appendStep(step: AppendStepInput): Promise<AppendStepResult> {
     if (this.#plan.duplicateStep === step.stepKey) {
       // Duplicate delivery: the same step body committed twice. The UNIQUE/UPSERT
       // contract must make the second a no-op (replayed) with no duplicate row.
@@ -97,10 +103,6 @@ export class FaultStore implements Store {
     return this.#inner.addEvent(workflowId, name, payload, now);
   }
 
-  takeEvent(workflowId: string, name: string, now: number): Promise<EventRow | null> {
-    return this.#inner.takeEvent(workflowId, name, now);
-  }
-
   consumeEventIntoJournal(
     args: ConsumeEventInput,
   ): Promise<{ found: true; payload: unknown; seq: number } | { found: false }> {
@@ -125,10 +127,6 @@ export class FaultStore implements Store {
 
   resetFailedSteps(workflowId: string): Promise<number> {
     return this.#inner.resetFailedSteps(workflowId);
-  }
-
-  releaseLease(id: string, fence?: Fence): Promise<void> {
-    return this.#inner.releaseLease(id, fence);
   }
 
   close(): void | Promise<void> {
