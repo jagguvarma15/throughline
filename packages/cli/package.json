@@ -1,6 +1,7 @@
 {
   "name": "@through-line/cli",
   "version": "0.3.172",
+  "private": true,
   "description": "Throughline CLI: start, inspect, signal, approve, and cancel durable runs from the terminal.",
   "license": "MIT",
   "keywords": ["durable-execution", "cli", "ai-agents", "workflow", "throughline"],
@@ -41,9 +42,5 @@
     "@through-line/core": "workspace:*",
     "@through-line/store-postgres": "workspace:*",
     "@through-line/store-sqlite": "workspace:*"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }
