@@ -1,6 +1,6 @@
 global:
   smtp_smarthost: 'localhost:587'
-  smtp_from: 'alertmanager@taskflow.local'
+  smtp_from: 'alertmanager@throughline.local'
 
 route:
   group_by: ['alertname']
