@@ -1,6 +1,6 @@
 {
   "name": "@through-line/store-sqlite",
-  "version": "0.3.172",
+  "version": "0.3.199",
   "private": true,
   "description": "Throughline default durable store backed by better-sqlite3.",
   "license": "MIT",
