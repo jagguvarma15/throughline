@@ -1,6 +1,7 @@
 {
   "name": "@through-line/store-sqlite",
   "version": "0.3.172",
+  "private": true,
   "description": "Throughline default durable store backed by better-sqlite3.",
   "license": "MIT",
   "keywords": [
@@ -51,9 +52,5 @@
     "@opentelemetry/sdk-trace-base": "^2.0.0",
     "@through-line/testing": "workspace:*",
     "@types/better-sqlite3": "^7.6.11"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }
