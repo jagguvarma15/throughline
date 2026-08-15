@@ -1,6 +1,7 @@
 # Operating Throughline from an AI agent (MCP)
 
-`@through-line/mcp` exposes durable-run operations as MCP tools, so an agent can be the
+The `throughline-mcp` bin (shipped with `@through-line/core`, with a transport-agnostic
+factory at `@through-line/core/mcp`) exposes durable-run operations as MCP tools, so an agent can be the
 operator of your agent runs: kick off work, watch it, approve gates, and clean up - while
 the durability engine keeps everything crash-safe underneath.
 
@@ -22,7 +23,7 @@ no side effect repeats (see `docs/guarantees.md`).
 ## Setup
 
 ```bash
-claude mcp add throughline --env THROUGHLINE_DB=./throughline.db -- npx @through-line/mcp
+claude mcp add throughline --env THROUGHLINE_DB=./throughline.db -- npx -y -p @through-line/core throughline-mcp
 ```
 
 `DATABASE_URL` (Postgres) wins over `THROUGHLINE_DB` (SQLite), mirroring the CLI and
