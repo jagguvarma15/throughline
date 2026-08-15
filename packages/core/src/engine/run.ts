@@ -8,6 +8,7 @@ import {
 } from "../errors";
 import { loadTracing } from "../otel";
 import type {
+  CancelState,
   DeterminismMode,
   Fence,
   Logger,
@@ -35,7 +36,8 @@ export interface RunDeps {
   logger: Logger;
   sleep: (ms: number) => Promise<void>;
   budgetLimit?: number;
-  checkCancel?: () => Promise<boolean>;
+  /** Shared cancel flag, seeded from the claim and kept fresh by the worker (§9). */
+  cancel?: CancelState;
   determinism?: DeterminismMode;
 }
 
@@ -60,7 +62,7 @@ export async function runWorkflow(deps: RunDeps): Promise<RunOutcome> {
     logger: deps.logger,
     sleep: deps.sleep,
     budgetLimit: deps.budgetLimit,
-    checkCancel: deps.checkCancel,
+    cancel: deps.cancel,
     determinism: deps.determinism,
     tracing,
   });
