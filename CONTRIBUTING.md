@@ -49,12 +49,14 @@ one allowed exception, in `@through-line/adapters-ai-sdk`. CI enforces this via
 
 ## Versioning and releases
 
-All `@through-line/*` packages version in lockstep. Version bumps are plain commits:
-edit the `version` field in every `packages/*/package.json` to the same new value in
-the release PR. The patch number is the count of commits on `main` since the previous
-version commit. Publishing to npm is a separate, manually dispatched workflow
-(`Release` in GitHub Actions), which builds, publishes with provenance, and creates
-the unified `vX.Y.Z` tag and GitHub release.
+Only `@through-line/core` is published to npm; it bundles the store, adapter, testing,
+and MCP workspace packages as subpath exports at build time, and those sibling packages
+stay private. All workspace packages still version in lockstep: edit the `version`
+field in every `packages/*/package.json` to the same new value in a plain commit. The
+patch number is the count of commits on `main` since the previous version commit.
+Publishing is a separate, manually dispatched workflow (`Release` in GitHub Actions),
+which builds, publishes with provenance, and creates the unified `vX.Y.Z` tag and
+GitHub release.
 
 ## Pull requests
 
