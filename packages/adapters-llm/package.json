@@ -1,6 +1,6 @@
 {
   "name": "@through-line/adapters-llm",
-  "version": "0.3.172",
+  "version": "0.3.199",
   "private": true,
   "description": "Throughline BYO-LLM helpers: wrap a user-provided model call in a durable step.",
   "license": "MIT",
