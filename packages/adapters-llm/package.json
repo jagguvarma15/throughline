@@ -1,6 +1,7 @@
 {
   "name": "@through-line/adapters-llm",
   "version": "0.3.172",
+  "private": true,
   "description": "Throughline BYO-LLM helpers: wrap a user-provided model call in a durable step.",
   "license": "MIT",
   "keywords": ["durable-execution", "llm", "ai-agents", "byo-llm", "throughline"],
@@ -39,9 +40,5 @@
   },
   "devDependencies": {
     "@through-line/store-sqlite": "workspace:*"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }
