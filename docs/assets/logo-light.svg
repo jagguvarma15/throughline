@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" role="img" aria-label="Throughline">
+  <path d="M6 60 A21 22 0 0 1 48 60 A21 22 0 0 0 90 60 A21 22 0 0 1 132 60 A21 22 0 0 0 174 60 L196 60"
+        fill="none" stroke="#18181b" stroke-width="7" stroke-linecap="round"
+        pathLength="100" stroke-dasharray="19.9 6.4 17 6.4 7.4 2.6 7.4 6.4 26.5"/>
+  <circle cx="48" cy="60" r="6.5" fill="none" stroke="#18181b" stroke-width="4"/>
+  <circle cx="90" cy="60" r="6.5" fill="none" stroke="#18181b" stroke-width="4"/>
+  <circle cx="132" cy="60" r="6.5" fill="none" stroke="#18181b" stroke-width="4"/>
+  <circle cx="174" cy="60" r="8" fill="#2b4fd8"/>
+  <text x="224" y="78" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="52" font-weight="600" letter-spacing="0.5" fill="#18181b">throughline</text>
+</svg>
