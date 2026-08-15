@@ -1,6 +1,6 @@
 {
   "name": "@through-line/core",
-  "version": "0.3.0",
+  "version": "0.3.172",
   "description": "Throughline durable-execution core engine: throughline(), task(), ctx, worker, replay.",
   "license": "MIT",
   "keywords": [
