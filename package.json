@@ -17,14 +17,11 @@
     "format": "biome format --write .",
     "check:deps": "node scripts/check-forbidden-deps.mjs",
     "docs:api": "typedoc",
-    "docs:llms": "node scripts/build-llms-full.mjs",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "pnpm -r build && changeset publish --no-git-tag"
+    "bench": "pnpm --filter @through-line/bench bench",
+    "release": "pnpm -r build && pnpm -r publish --access public --no-git-checks"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.2",
     "tsup": "^8.3.5",
     "typedoc": "^0.28.0",
