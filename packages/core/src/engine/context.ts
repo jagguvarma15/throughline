@@ -274,7 +274,7 @@ export class RunContext implements Context {
 
     // No event. Resolve the (stable) deadline: when resuming a park on THIS wait, reuse the
     // persisted workflow.wakeAt; otherwise this is a fresh wait, so derive it from opts.timeout.
-    // (Same-name waits in a loop with timeouts are not individually tracked in v0.1.)
+    // (Same-name waits in a loop with timeouts are not individually tracked.)
     const isResumeOfThisWait =
       this.#d.workflow.waitEvent === name && this.#d.workflow.wakeAt !== null;
     const deadline = isResumeOfThisWait
