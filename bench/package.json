@@ -1,0 +1,24 @@
+{
+  "name": "@through-line/bench",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Macro-benchmarks for the Throughline engine and stores (never published).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "bench": "tsx src/run.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@through-line/core": "workspace:*",
+    "@through-line/store-postgres": "workspace:*",
+    "@through-line/store-sqlite": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
