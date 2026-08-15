@@ -35,6 +35,13 @@ export interface StartOptions {
 export interface WorkerOptions {
   concurrency?: number;
   pollIntervalMs?: number;
+  /**
+   * Cap for the idle-poll backoff: an idle worker loop doubles its delay from
+   * pollIntervalMs up to this cap, resetting on a claim or a store push wakeup.
+   * Durable timers (ctx.sleep, wait timeouts) are discovered by polling, so this
+   * cap also bounds how late a due timer is observed. Default 5000.
+   */
+  maxPollIntervalMs?: number;
   leaseMs?: number;
   workerId?: string;
   /**
@@ -139,6 +146,7 @@ export function throughline(options: ThroughlineOptions): Throughline {
         sleep,
         concurrency: opts?.concurrency,
         pollIntervalMs: opts?.pollIntervalMs,
+        maxPollIntervalMs: opts?.maxPollIntervalMs,
         leaseMs: opts?.leaseMs,
         workerId: opts?.workerId,
         maxRecoveryAttempts: opts?.maxRecoveryAttempts,
