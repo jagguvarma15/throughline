@@ -247,9 +247,7 @@ export class Worker {
       }
       if (!this.#running) break;
       const woken = await this.#wake.sleep(idleDelay, this.#sleep);
-      idleDelay = woken
-        ? this.#pollIntervalMs
-        : Math.min(idleDelay * 2, this.#maxPollIntervalMs);
+      idleDelay = woken ? this.#pollIntervalMs : Math.min(idleDelay * 2, this.#maxPollIntervalMs);
     }
   }
 
@@ -269,11 +267,7 @@ export class Worker {
     }
   }
 
-  #startHeartbeat(
-    id: string,
-    fence: Fence,
-    cancel: CancelState,
-  ): ReturnType<typeof setInterval> {
+  #startHeartbeat(id: string, fence: Fence, cancel: CancelState): ReturnType<typeof setInterval> {
     const interval = Math.max(1, Math.floor(this.#leaseMs / 3));
     return setInterval(() => {
       this.#store
