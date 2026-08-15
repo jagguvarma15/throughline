@@ -1,6 +1,6 @@
 {
   "name": "@through-line/adapters-ai-sdk",
-  "version": "0.3.172",
+  "version": "0.3.199",
   "private": true,
   "description": "Durable Vercel AI SDK adapter: journal every model call and tool execution as a Throughline step.",
   "license": "MIT",
