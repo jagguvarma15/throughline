@@ -167,9 +167,29 @@ running `fn`, leaving a consistent journal.
 
 `tf.cancel(id)` moves a `pending`/`waiting` run to the terminal `cancelled` status with a
 conditional update (a no-op if the run already reached a terminal state). A **running** run
-is cancelled cooperatively: the heartbeat observes the cancel request and `ctx.step` throws
-an internal `CancelledError` at the next step boundary. `cancelled` is distinct from
-`failed`/`dead`.
+is cancelled cooperatively, with no dedicated polling: the cancel flag is observed at the
+**earlier of** (a) any step journal commit — every `appendStep` reports it in the same
+transaction as the fence check — or (b) the next heartbeat tick (`leaseMs / 3`, default
+10s), and it is also seeded from the claimed row on re-claim. Once observed, `ctx.step`
+throws an internal `CancelledError` at the **next fresh-step boundary**. Cooperative cancel
+is best-effort by construction: a run whose remaining steps are all replays, or whose final
+step is already in flight, may still complete. `cancelled` is distinct from `failed`/`dead`.
+
+## 9a. Worker scheduling and wake latency
+
+Workers poll for claimable runs. An idle loop backs off exponentially from
+`pollIntervalMs` (default 200ms) up to `maxPollIntervalMs` (default 5s), and resets to the
+floor on a successful claim or a push wakeup. The latency contract:
+
+- **Externally triggered work** (start, signal, approval, redrive) is claimed within
+  `maxPollIntervalMs` at worst. On Postgres, LISTEN/NOTIFY wakes idle workers immediately,
+  so the typical latency is milliseconds; notify is **best-effort and non-durable** — no
+  guarantee in this document depends on it, and polling remains the correctness backstop.
+- **Durable timers** (`ctx.sleep`, wait timeouts) are discovered by polling only, so a due
+  `wakeAt` is observed at most `maxPollIntervalMs` after its deadline. Lower the cap for
+  tighter timers; raise it for lower idle load when timers are absent.
+- `worker.stop()` interrupts idle sleeps immediately; stop latency is bounded by the
+  in-flight run, never by the backoff cap.
 
 ## 10. Error taxonomy
 
@@ -206,6 +226,6 @@ or `POST /admin/prune`.
 
 ---
 
-*Status: v0.1 in progress. These guarantees are proven by the fault-injection + property
-suites (`@through-line/testing`) and the parameterized store/engine conformance batteries,
-not asserted in prose alone.*
+*These guarantees are proven by the fault-injection + property suites
+(`@through-line/testing`) and the parameterized store/engine conformance batteries, not
+asserted in prose alone.*
