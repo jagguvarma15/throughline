@@ -1,66 +1,17 @@
 name: Release
 
+# Publishing is a deliberate human decision: it only runs via manual dispatch,
+# and only once the repo owner has added an NPM_TOKEN secret (and owns the
+# @through-line scope on npm). Version bumps are plain commits that set the
+# same version in every packages/*/package.json.
 on:
-  push:
-    branches: [main]
-  # Publishing is a deliberate human decision: it only runs via manual dispatch,
-  # and only once the repo owner has added an NPM_TOKEN secret (and owns the
-  # @through-line scope on npm).
   workflow_dispatch:
 
 concurrency: release-${{ github.ref }}
 
 jobs:
-  version:
-    name: Commit version bumps to main
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Applies pending .changeset/*.md entries (version bumps + CHANGELOGs) and pushes
-      # the result straight to main — no PR, so this works without the "Actions may
-      # create pull requests" repo setting. GITHUB_TOKEN pushes don't re-trigger
-      # workflows, so this cannot loop. Versioning is still not a publish.
-      - name: Version packages and push
-        run: |
-          if ! ls .changeset/*.md 2>/dev/null | grep -v README.md >/dev/null; then
-            echo "No pending changesets."
-            exit 0
-          fi
-          pnpm version-packages
-          pnpm install --lockfile-only
-          # changesets rewrites manifests in its own JSON style; reformat so the
-          # version commit doesn't fail Biome on the next CI run.
-          pnpm exec biome check --write .
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "Nothing to commit."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Version packages"
-          git push origin main
-
   publish:
     name: Publish to npm (manual)
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -99,8 +50,7 @@ jobs:
           NPM_CONFIG_PROVENANCE: "true"
 
       # All @through-line/* packages version in lockstep, so one unified vX.Y.Z tag and
-      # GitHub release represent the whole publish (changesets' per-package tags are
-      # suppressed via --no-git-tag). Idempotent so a re-dispatch doesn't fail.
+      # GitHub release represent the whole publish. Idempotent so a re-dispatch doesn't fail.
       - name: Tag and create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
