@@ -1,71 +1,63 @@
-# @through-line/core
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/jagguvarma15/throughline/main/docs/assets/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/jagguvarma15/throughline/main/docs/assets/logo-light.svg" alt="Throughline" width="420">
+  </picture>
+</p>
 
-**A lightweight, embeddable, framework-agnostic durable-execution engine for AI agents.**
+<p align="center">
+  <a href="https://github.com/jagguvarma15/throughline/blob/main/docs/guarantees.md"><img src="https://img.shields.io/badge/durability-crash--safe-2b4fd8" alt="durability: crash-safe"></a>
+  <a href="https://github.com/jagguvarma15/throughline/blob/main/docs/guarantees.md"><img src="https://img.shields.io/badge/effects-exactly--once-2b4fd8" alt="effects: exactly-once"></a>
+  <a href="https://github.com/jagguvarma15/throughline/blob/main/docs/guarantees.md"><img src="https://img.shields.io/badge/replay-deterministic-2b4fd8" alt="replay: deterministic"></a>
+  <a href="https://github.com/jagguvarma15/throughline/blob/main/docs/recipes/human-approval.md"><img src="https://img.shields.io/badge/human--in--the--loop-built--in-2b4fd8" alt="human-in-the-loop: built-in"></a>
+  <a href="https://github.com/jagguvarma15/throughline/blob/main/docs/usage.md"><img src="https://img.shields.io/badge/stores-SQLite%20%7C%20Postgres-2b4fd8" alt="stores: SQLite and Postgres"></a>
+</p>
 
-Wrap the steps of any agent loop in `ctx.step(...)` and Throughline journals every result
-to SQLite or Postgres. Kill the process mid-run — a worker re-claims the run and replays
-the journal: completed steps return their recorded results, the first incomplete step
-runs. Side effects wrapped in an idempotency-keyed step happen exactly once.
-
-- **Crash-resume** with zero duplicate model calls or effects
-- **Durable human-in-the-loop** — `waitForApproval` parks in the DB for hours or days
-- **Token/cost budgets** — runaway loops halt with `BudgetExceededError`
-- **Deterministic record/replay** — regression-test multi-step agents offline for ~$0
+Throughline is the durable thread for AI agents: wrap any agent loop and every step is
+journaled, so a crashed run resumes exactly where it stopped, side effects happen exactly
+once, and human approvals survive redeploys. Everything is in this one package: the
+engine, the SQLite and Postgres stores, the AI SDK and BYO-LLM adapters, the testing
+harness, the `throughline` CLI, and the `throughline-mcp` MCP server.
 
 ## Install
 
 ```bash
-pnpm add @through-line/core @through-line/store-sqlite
+pnpm add @through-line/core
 ```
 
 ## Quickstart
 
 ```ts
 import { throughline } from "@through-line/core";
-import { sqlite } from "@through-line/store-sqlite";
+import { sqlite } from "@through-line/core/sqlite";
 
 const tf = throughline({ store: sqlite("./throughline.db") });
 
-const research = tf.task("research", async (ctx, input: { topic: string }) => {
-  // Only ctx.step bodies are durable: journaled on first success, replayed verbatim.
-  const plan = await ctx.step("plan", () => callYourModel(`plan ${input.topic}`));
-
-  await ctx.sleep("cool-off", 1000);                    // durable timer
-  const approved = await ctx.waitForApproval("publish"); // survives restarts
-
-  if (approved) {
-    await ctx.step("publish", () => publish(plan)); // exactly-once via stable step key
-  }
+tf.task("research", async (ctx, input: { topic: string }) => {
+  const plan = await ctx.step("plan", () => callYourModel(input.topic)); // journaled once
+  const approved = await ctx.waitForApproval("publish");                 // survives restarts
+  if (approved) await ctx.step("publish", () => publish(plan));          // exactly-once
   return { plan };
 });
 
 const id = await tf.start("research", { topic: "sea otters" });
-await tf.worker({ concurrency: 4 }).start();
-
-// Later, from your control plane / UI:
-await tf.signal(id, "publish", { approved: true });
+tf.worker({ concurrency: 4 }).start();
 ```
 
-## Guarantees
+Kill the process at any point: a worker re-claims the run and replays the journal -
+completed steps return their recorded results and never re-run. Postgres for production
+is one import away: `import { postgres } from "@through-line/core/postgres"`.
 
-The precise, non-overclaimed contract — durability boundary, at-least-once vs
-exactly-once side effects, replay algorithm, lease fencing, budgets — lives in
-[docs/guarantees.md](https://github.com/jagguvarma15/throughline/blob/main/docs/guarantees.md),
-and is demonstrated by fault-injection + property tests (identical final state across
-100+ randomized crash schedules), not asserted in prose.
+## Subpaths
 
-## Ecosystem
+`@through-line/core` (engine), `/sqlite`, `/postgres`, `/llm`, `/ai-sdk` (needs the `ai`
+peer), `/testing` (needs the `vitest` peer), `/mcp` - full table in the
+[usage guide](https://github.com/jagguvarma15/throughline/blob/main/docs/usage.md).
 
-| Package | Purpose |
-|---|---|
-| `@through-line/store-sqlite` | Default durable store (better-sqlite3) |
-| `@through-line/store-postgres` | Production durable store (pg) |
-| `@through-line/adapters-ai-sdk` | Durable Vercel AI SDK model calls + exactly-once tools |
-| `@through-line/adapters-llm` | BYO-LLM helper: wrap any model call in a durable step |
-| `@through-line/testing` | Fault-injection store, conformance suites, golden traces |
+## Learn more
 
-Full docs, runnable demos (including a `kill -9` resume script), and a reference
-deployment with dashboard + Prometheus metrics:
-[github.com/jagguvarma15/throughline](https://github.com/jagguvarma15/throughline).
+- [Durability guarantees](https://github.com/jagguvarma15/throughline/blob/main/docs/guarantees.md) - the precise contract, proven by fault-injection and property tests
+- [Usage guide](https://github.com/jagguvarma15/throughline/blob/main/docs/usage.md) - CLI, MCP, demos, performance, deployment
+- [Recipes and examples](https://github.com/jagguvarma15/throughline) - including a `kill -9` resumable research agent
 
-MIT © Jagadesh Varma Nadimpalli
+MIT (c) Jagadesh Varma Nadimpalli
