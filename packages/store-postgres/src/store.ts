@@ -286,7 +286,12 @@ export class PostgresStore implements Store {
     });
   }
 
-  async heartbeat(id: string, fence: Fence, leaseMs: number, now: number): Promise<HeartbeatResult> {
+  async heartbeat(
+    id: string,
+    fence: Fence,
+    leaseMs: number,
+    now: number,
+  ): Promise<HeartbeatResult> {
     const r = await this.#pool.query<{ cancel_requested: boolean }>(
       `UPDATE workflows SET lease_expires_at=$1, heartbeat_at=$2, updated_at=$2
        WHERE id=$3 AND locked_by=$4 AND lease_epoch=$5
