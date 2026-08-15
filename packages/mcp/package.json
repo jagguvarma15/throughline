@@ -1,6 +1,7 @@
 {
   "name": "@through-line/mcp",
   "version": "0.3.172",
+  "private": true,
   "description": "Throughline MCP server: let AI agents start, inspect, signal, approve, and cancel durable runs.",
   "license": "MIT",
   "keywords": ["durable-execution", "mcp", "model-context-protocol", "ai-agents", "throughline"],
@@ -43,9 +44,5 @@
     "@through-line/store-postgres": "workspace:*",
     "@through-line/store-sqlite": "workspace:*",
     "zod": "^3.23.8"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }
