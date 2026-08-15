@@ -1,6 +1,7 @@
 {
   "name": "@through-line/store-postgres",
   "version": "0.3.172",
+  "private": true,
   "description": "Throughline production durable store backed by pg (Postgres).",
   "license": "MIT",
   "keywords": ["durable-execution", "postgres", "postgresql", "workflow", "journal", "throughline"],
@@ -41,9 +42,5 @@
   "devDependencies": {
     "@through-line/testing": "workspace:*",
     "@types/pg": "^8.11.10"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }
