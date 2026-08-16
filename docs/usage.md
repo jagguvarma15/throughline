@@ -1,7 +1,8 @@
 # Using Throughline
 
-Everything the minimal README leaves out: the package layout, operating runs, the demos,
-performance numbers, the reference deployment, and development commands.
+Everything the minimal README leaves out: the package layout, integrating with an
+existing agent, operating runs, the demos, performance numbers, the reference deployment,
+and development commands.
 
 ## One package
 
@@ -21,6 +22,41 @@ subpath exports. The two executables (`throughline`, `throughline-mcp`) install 
 The repo additionally contains the private reference apps `apps/control-plane` (auth-gated
 read/op HTTP API with `/metrics`) and `apps/dashboard` (durable-run UI), which are not
 published to npm.
+
+## Integrate with an existing agent
+
+Throughline is a library you import, not a runtime you move your agent into: keep your
+loop, wrap its side effects. Three depths of integration, all in the one package:
+
+- **Any hand-rolled loop.** Register the function you already have as `tf.task(...)` and
+  wrap each effectful line (model call, tool call, database write) in
+  `ctx.step("name", fn)`. Control flow, prompts, and business logic stay yours; on resume
+  the journal fast-forwards completed steps instead of re-executing them. A human gate is
+  one line: `ctx.waitForApproval("publish")`.
+- **A Vercel AI SDK loop.** `@through-line/core/ai-sdk` wraps the pieces the SDK
+  controls: `durableModel(ctx, model)` journals every `generateText` call inside the
+  SDK's multi-step tool loop, and `durableToolExecute(ctx, name, fn)` keys each tool
+  execution by `toolCallId` for exactly-once effects.
+  [examples/ai-sdk-agent](../examples/ai-sdk-agent) is the whole pattern in about 40
+  lines.
+- **Any other LLM client.** `@through-line/core/llm` gives `modelStep()`, which wraps
+  whatever `callModel` function you already use (OpenAI or Anthropic SDK, LangChain, a
+  local model). The engine never depends on a provider SDK, and CI enforces that.
+
+What changes in your codebase: the agent-loop file (wrap effects in steps), a few
+bootstrap lines (`throughline({ store })` plus `tf.worker().start()`, same process or a
+separate one), one dependency, and a SQLite path or Postgres URL -
+`throughline migrate` creates its own tables and touches nothing else.
+
+What Throughline asks of a task in return: side effects live only inside steps, values
+derive from step results rather than closures, and the step sequence stays
+deterministic. Divergence on replay raises `NonDeterminismError` instead of silently
+corrupting state - the full contract is in [guarantees.md](guarantees.md).
+
+Prove it against your own agent: `@through-line/core/testing` ships the same tools this
+repo is tested with - `faultStore` to crash execution at chosen storage operations,
+golden traces to record a real trajectory and replay it offline in CI, and the
+store/engine conformance suites if you bring a custom store.
 
 ## Operate runs from the terminal or an AI agent
 
